@@ -46,6 +46,24 @@
             </div>
         </div>
 
+        <!-- Points favoris -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-gray-800">⭐ Points favoris</h2>
+                <button type="button" id="toggleFavorites" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                    Afficher/Masquer
+                </button>
+            </div>
+            <div id="favoritesContainer" class="hidden">
+                <div id="favoritesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+                    <!-- Les points favoris seront affichés ici -->
+                </div>
+                <p id="noFavoritesMessage" class="text-gray-400 text-sm text-center py-4">
+                    Aucun point favori enregistré. Ajoutez des points ci-dessous et cliquez sur "⭐ Sauvegarder comme favori"
+                </p>
+            </div>
+        </div>
+
         <!-- Formulaire principal -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <!-- Colonne gauche : Formulaire -->

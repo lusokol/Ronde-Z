@@ -254,6 +254,57 @@ button:active::after {
     background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
 }
 
+/* Styles pour les cartes de favoris */
+.favorite-card {
+    transition: all 0.2s ease;
+}
+
+.favorite-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Styles pour le conteneur de contrainte horaire */
+.constraint-time-container {
+    transition: all 0.3s ease;
+}
+
+.constraint-time-container.hidden {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Amélioration des inputs type time */
+input[type="time"] {
+    cursor: pointer;
+}
+
+/* Amélioration visuelle pour les badges de contrainte */
+.bg-green-100 {
+    background-color: #d1fae5;
+}
+
+.text-green-800 {
+    color: #065f46;
+}
+
+.bg-red-100 {
+    background-color: #fee2e2;
+}
+
+.text-red-800 {
+    color: #991b1b;
+}
+
+/* Amélioration des inputs numériques pour heures/minutes */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    opacity: 1;
+}
+
 /* Print styles */
 @media print {
     .no-print {
@@ -267,5 +318,13 @@ button:active::after {
     .result-card {
         box-shadow: none;
         border: 1px solid #ddd;
+    }
+
+    .favorite-card {
+        display: none;
+    }
+
+    #favoritesContainer {
+        display: none;
     }
 }

@@ -4,6 +4,7 @@
 // Configuration et initialisation
 const API_KEY_STORAGE = 'ors_api_key';
 const POINTS_STORAGE = 'ronde_points';
+const FAVORITES_STORAGE = 'favorite_points';
 let pointsCounter = 0;
 
 // Éléments DOM
@@ -19,6 +20,10 @@ const errorMessage = document.getElementById('errorMessage');
 const closeErrorBtn = document.getElementById('closeError');
 const showApiHelpBtn = document.getElementById('showApiHelp');
 const apiHelpContent = document.getElementById('apiHelpContent');
+const toggleFavoritesBtn = document.getElementById('toggleFavorites');
+const favoritesContainer = document.getElementById('favoritesContainer');
+const favoritesList = document.getElementById('favoritesList');
+const noFavoritesMessage = document.getElementById('noFavoritesMessage');
 
 // ==========================================
 // Initialisation au chargement de la page
@@ -30,6 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedApiKey) {
         apiKeyInput.value = savedApiKey;
     }
+
+    // Charger les points favoris
+    loadFavorites();
 
     // Charger les points sauvegardés
     loadSavedPoints();
@@ -49,17 +57,35 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         apiHelpContent.classList.toggle('hidden');
     });
+    toggleFavoritesBtn.addEventListener('click', () => {
+        favoritesContainer.classList.toggle('hidden');
+    });
 });
 
 // ==========================================
 // Gestion du formulaire et des points
 // ==========================================
 
-function addPoint() {
+function addPoint(pointData = null) {
     pointsCounter++;
     const pointDiv = document.createElement('div');
     pointDiv.className = 'point-item border border-gray-200 rounded-lg p-4 bg-gray-50';
     pointDiv.dataset.id = pointsCounter;
+
+    const address = pointData?.address || '';
+    // Gérer l'ancien format (time en minutes) et le nouveau format (timeHours/timeMinutes)
+    let timeHours = 0;
+    let timeMinutes = 10;
+
+    if (pointData?.time !== undefined) {
+        const totalMinutes = parseInt(pointData.time);
+        timeHours = Math.floor(totalMinutes / 60);
+        timeMinutes = totalMinutes % 60;
+    }
+
+    const name = pointData?.name || '';
+    const timeConstraint = pointData?.timeConstraint || 'none';
+    const constraintTime = pointData?.constraintTime || '09:00';
 
     pointDiv.innerHTML = `
         <div class="flex items-start gap-3">
@@ -68,19 +94,66 @@ function addPoint() {
             </div>
             <div class="flex-1 space-y-3">
                 <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Nom du point (optionnel)</label>
+                    <input type="text"
+                           class="point-name w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                           placeholder="Ex: Bureau client A"
+                           value="${name}">
+                </div>
+                <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">Adresse</label>
                     <input type="text"
                            class="point-address w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                            placeholder="Ex: 456 Avenue des Champs, Lyon"
+                           value="${address}"
                            required>
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Temps sur place (minutes)</label>
-                    <input type="number"
-                           class="point-time w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                           min="0"
-                           value="10"
-                           required>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Temps sur place</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="flex items-center gap-2">
+                            <input type="number"
+                                   class="point-time-hours w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                   min="0"
+                                   max="23"
+                                   value="${timeHours}"
+                                   placeholder="0">
+                            <span class="text-xs text-gray-500">h</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="number"
+                                   class="point-time-minutes w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                   min="0"
+                                   max="59"
+                                   value="${timeMinutes}"
+                                   placeholder="0"
+                                   required>
+                            <span class="text-xs text-gray-500">min</span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Contrainte horaire</label>
+                    <select class="time-constraint w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            onchange="toggleTimeInput(this)">
+                        <option value="none" ${timeConstraint === 'none' ? 'selected' : ''}>Aucune</option>
+                        <option value="before" ${timeConstraint === 'before' ? 'selected' : ''}>Avant</option>
+                        <option value="at" ${timeConstraint === 'at' ? 'selected' : ''}>À</option>
+                        <option value="after" ${timeConstraint === 'after' ? 'selected' : ''}>Après</option>
+                    </select>
+                </div>
+                <div class="constraint-time-container ${timeConstraint === 'none' ? 'hidden' : ''}">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Heure de la contrainte</label>
+                    <input type="time"
+                           class="constraint-time w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                           value="${constraintTime}">
+                </div>
+                <div class="flex gap-2">
+                    <button type="button"
+                            class="save-favorite flex-1 px-3 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors text-xs font-medium"
+                            onclick="saveFavorite(this)">
+                        ⭐ Sauvegarder comme favori
+                    </button>
                 </div>
             </div>
             <button type="button"
@@ -93,6 +166,17 @@ function addPoint() {
 
     pointsList.appendChild(pointDiv);
     savePoints();
+}
+
+function toggleTimeInput(selectElement) {
+    const pointDiv = selectElement.closest('.point-item');
+    const timeContainer = pointDiv.querySelector('.constraint-time-container');
+
+    if (selectElement.value === 'none') {
+        timeContainer.classList.add('hidden');
+    } else {
+        timeContainer.classList.remove('hidden');
+    }
 }
 
 function removePoint(button) {
@@ -129,9 +213,15 @@ function savePoints() {
 
     pointElements.forEach(pointEl => {
         const address = pointEl.querySelector('.point-address').value;
-        const time = pointEl.querySelector('.point-time').value;
+        const timeHours = parseInt(pointEl.querySelector('.point-time-hours')?.value || 0);
+        const timeMinutes = parseInt(pointEl.querySelector('.point-time-minutes')?.value || 0);
+        const time = timeHours * 60 + timeMinutes;
+        const name = pointEl.querySelector('.point-name').value;
+        const timeConstraint = pointEl.querySelector('.time-constraint').value;
+        const constraintTime = pointEl.querySelector('.constraint-time').value;
+
         if (address) {
-            points.push({ address, time });
+            points.push({ address, time, name, timeConstraint, constraintTime });
         }
     });
 
@@ -144,14 +234,168 @@ function loadSavedPoints() {
         try {
             const points = JSON.parse(savedPoints);
             points.forEach(point => {
-                addPoint();
-                const lastPoint = pointsList.lastElementChild;
-                lastPoint.querySelector('.point-address').value = point.address;
-                lastPoint.querySelector('.point-time').value = point.time;
+                addPoint(point);
             });
         } catch (e) {
             console.error('Erreur lors du chargement des points:', e);
         }
+    }
+}
+
+// ==========================================
+// Gestion des points favoris
+// ==========================================
+
+function saveFavorite(button) {
+    const pointDiv = button.closest('.point-item');
+    const name = pointDiv.querySelector('.point-name').value.trim();
+    const address = pointDiv.querySelector('.point-address').value.trim();
+    const timeHours = parseInt(pointDiv.querySelector('.point-time-hours')?.value || 0);
+    const timeMinutes = parseInt(pointDiv.querySelector('.point-time-minutes')?.value || 0);
+    const time = timeHours * 60 + timeMinutes;
+    const timeConstraint = pointDiv.querySelector('.time-constraint').value;
+    const constraintTime = pointDiv.querySelector('.constraint-time').value;
+
+    if (!address) {
+        showError('Veuillez entrer une adresse avant de sauvegarder comme favori.');
+        return;
+    }
+
+    if (!name) {
+        showError('Veuillez donner un nom au point avant de le sauvegarder comme favori.');
+        return;
+    }
+
+    // Charger les favoris existants
+    let favorites = [];
+    const savedFavorites = localStorage.getItem(FAVORITES_STORAGE);
+    if (savedFavorites) {
+        try {
+            favorites = JSON.parse(savedFavorites);
+        } catch (e) {
+            console.error('Erreur lors du chargement des favoris:', e);
+        }
+    }
+
+    // Vérifier si le favori existe déjà
+    const existingIndex = favorites.findIndex(fav => fav.name === name);
+    if (existingIndex !== -1) {
+        if (!confirm(`Un favori avec le nom "${name}" existe déjà. Voulez-vous le remplacer ?`)) {
+            return;
+        }
+        favorites[existingIndex] = { name, address, time, timeConstraint, constraintTime };
+    } else {
+        favorites.push({ name, address, time, timeConstraint, constraintTime });
+    }
+
+    // Sauvegarder
+    localStorage.setItem(FAVORITES_STORAGE, JSON.stringify(favorites));
+
+    // Recharger l'affichage des favoris
+    loadFavorites();
+
+    // Message de confirmation
+    showError(`Point "${name}" sauvegardé dans les favoris !`);
+}
+
+function loadFavorites() {
+    const savedFavorites = localStorage.getItem(FAVORITES_STORAGE);
+    let favorites = [];
+
+    if (savedFavorites) {
+        try {
+            favorites = JSON.parse(savedFavorites);
+        } catch (e) {
+            console.error('Erreur lors du chargement des favoris:', e);
+        }
+    }
+
+    favoritesList.innerHTML = '';
+
+    if (favorites.length === 0) {
+        noFavoritesMessage.classList.remove('hidden');
+    } else {
+        noFavoritesMessage.classList.add('hidden');
+
+        favorites.forEach((favorite, index) => {
+            const favoriteCard = document.createElement('div');
+            favoriteCard.className = 'favorite-card border border-indigo-200 rounded-lg p-3 bg-indigo-50 hover:bg-indigo-100 transition-colors';
+
+            const constraintLabel = {
+                'none': '',
+                'before': `⏰ Avant ${favorite.constraintTime}`,
+                'at': `⏰ À ${favorite.constraintTime}`,
+                'after': `⏰ Après ${favorite.constraintTime}`
+            }[favorite.timeConstraint];
+
+            // Formater le temps (convertir minutes en heures + minutes)
+            const totalMinutes = parseInt(favorite.time || 0);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            let timeLabel = '';
+            if (hours > 0 && minutes > 0) {
+                timeLabel = `${hours}h ${minutes}min`;
+            } else if (hours > 0) {
+                timeLabel = `${hours}h`;
+            } else {
+                timeLabel = `${minutes}min`;
+            }
+
+            favoriteCard.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <h4 class="font-semibold text-indigo-900 text-sm">${favorite.name}</h4>
+                    <button onclick="deleteFavorite('${favorite.name}')"
+                            class="text-red-500 hover:text-red-700 text-xs">
+                        ✕
+                    </button>
+                </div>
+                <p class="text-xs text-gray-600 mb-2">${favorite.address}</p>
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-indigo-700">⏱️ ${timeLabel}</span>
+                    ${constraintLabel ? `<span class="text-orange-700">${constraintLabel}</span>` : ''}
+                </div>
+                <button onclick="useFavorite('${favorite.name}')"
+                        class="mt-2 w-full px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-xs">
+                    ➕ Utiliser
+                </button>
+            `;
+
+            favoritesList.appendChild(favoriteCard);
+        });
+    }
+}
+
+function useFavorite(favoriteName) {
+    const savedFavorites = localStorage.getItem(FAVORITES_STORAGE);
+    if (!savedFavorites) return;
+
+    try {
+        const favorites = JSON.parse(savedFavorites);
+        const favorite = favorites.find(fav => fav.name === favoriteName);
+
+        if (favorite) {
+            addPoint(favorite);
+        }
+    } catch (e) {
+        console.error('Erreur lors de l\'utilisation du favori:', e);
+    }
+}
+
+function deleteFavorite(favoriteName) {
+    if (!confirm(`Voulez-vous vraiment supprimer le favori "${favoriteName}" ?`)) {
+        return;
+    }
+
+    const savedFavorites = localStorage.getItem(FAVORITES_STORAGE);
+    if (!savedFavorites) return;
+
+    try {
+        let favorites = JSON.parse(savedFavorites);
+        favorites = favorites.filter(fav => fav.name !== favoriteName);
+        localStorage.setItem(FAVORITES_STORAGE, JSON.stringify(favorites));
+        loadFavorites();
+    } catch (e) {
+        console.error('Erreur lors de la suppression du favori:', e);
     }
 }
 
@@ -176,12 +420,18 @@ async function handleFormSubmit(e) {
 
     pointElements.forEach(pointEl => {
         const address = pointEl.querySelector('.point-address').value.trim();
-        const time = parseInt(pointEl.querySelector('.point-time').value);
+        const timeHours = parseInt(pointEl.querySelector('.point-time-hours')?.value || 0);
+        const timeMinutes = parseInt(pointEl.querySelector('.point-time-minutes')?.value || 0);
+        const time = timeHours * 60 + timeMinutes; // Convertir en minutes
+        const timeConstraint = pointEl.querySelector('.time-constraint').value;
+        const constraintTime = pointEl.querySelector('.constraint-time').value;
 
         if (address) {
             points.push({
                 address,
-                timeOnSite: time
+                timeOnSite: time,
+                timeConstraint,
+                constraintTime
             });
         }
     });
@@ -202,8 +452,8 @@ async function handleFormSubmit(e) {
         // Créer la matrice de distances
         const distanceMatrix = await getDistanceMatrix(coordinates, apiKey);
 
-        // Optimiser la route (TSP)
-        const optimizedRoute = optimizeTSP(distanceMatrix, points.length);
+        // Optimiser la route (TSP) avec contraintes horaires
+        const optimizedRoute = optimizeTSP(distanceMatrix, points.length, points);
 
         // Calculer les détails de la route
         const routeDetails = calculateRouteDetails(
@@ -300,36 +550,82 @@ async function getDistanceMatrix(coordinates, apiKey) {
 }
 
 // ==========================================
-// Algorithme d'optimisation TSP
+// Algorithme d'optimisation TSP avec contraintes horaires
 // ==========================================
 
-function optimizeTSP(matrix, numPoints) {
-    // Algorithme du plus proche voisin (Nearest Neighbor)
+function optimizeTSP(matrix, numPoints, points) {
+    // Algorithme du plus proche voisin modifié avec contraintes horaires
     // Point 0 = départ/arrivée
     // Points 1 à numPoints = points à visiter
 
     const distances = matrix.distances;
+    const durations = matrix.durations; // en secondes
     const visited = new Set([0]); // Commence au point de départ
     const route = [0];
     let current = 0;
+    let currentTime = new Date(); // Heure de départ (maintenant)
+    currentTime.setSeconds(0, 0); // Arrondir aux minutes
 
     // Visiter tous les points (sauf le point de départ)
     while (visited.size <= numPoints) {
-        let nearest = -1;
-        let minDist = Infinity;
+        let best = -1;
+        let bestScore = Infinity;
 
-        // Trouver le point le plus proche non visité
+        // Évaluer chaque point non visité
         for (let i = 1; i <= numPoints; i++) {
-            if (!visited.has(i) && distances[current][i] < minDist) {
-                minDist = distances[current][i];
-                nearest = i;
+            if (visited.has(i)) continue;
+
+            const point = points[i - 1];
+            const travelTime = durations[current][i] / 60; // Convertir en minutes
+            const arrivalTime = new Date(currentTime.getTime() + travelTime * 60000);
+
+            // Vérifier les contraintes horaires
+            let constraintPenalty = 0;
+            if (point.timeConstraint && point.timeConstraint !== 'none') {
+                const [constraintHour, constraintMinute] = point.constraintTime.split(':').map(Number);
+                const constraintDate = new Date(arrivalTime);
+                constraintDate.setHours(constraintHour, constraintMinute, 0, 0);
+
+                if (point.timeConstraint === 'before') {
+                    // Doit arriver avant l'heure spécifiée
+                    if (arrivalTime > constraintDate) {
+                        constraintPenalty = 10000; // Pénalité très élevée si impossible
+                    }
+                } else if (point.timeConstraint === 'at') {
+                    // Doit arriver à l'heure spécifiée (±15 min de tolérance)
+                    const diff = Math.abs(arrivalTime - constraintDate) / 60000; // en minutes
+                    if (diff > 15) {
+                        constraintPenalty = diff * 10; // Pénalité proportionnelle
+                    }
+                } else if (point.timeConstraint === 'after') {
+                    // Doit arriver après l'heure spécifiée
+                    if (arrivalTime < constraintDate) {
+                        constraintPenalty = 10000; // Pénalité très élevée si impossible
+                    }
+                }
+            }
+
+            // Score = distance + pénalité contrainte
+            const score = distances[current][i] + constraintPenalty;
+
+            if (score < bestScore) {
+                bestScore = score;
+                best = i;
             }
         }
 
-        if (nearest !== -1) {
-            visited.add(nearest);
-            route.push(nearest);
-            current = nearest;
+        if (best !== -1) {
+            visited.add(best);
+            route.push(best);
+
+            // Mettre à jour le temps actuel
+            const travelTime = durations[current][best] / 60; // en minutes
+            currentTime = new Date(currentTime.getTime() + travelTime * 60000);
+            // Ajouter le temps sur place
+            const point = points[best - 1];
+            currentTime = new Date(currentTime.getTime() + point.timeOnSite * 60000);
+
+            current = best;
         } else {
             break;
         }
@@ -350,6 +646,8 @@ function calculateRouteDetails(route, matrix, startPoint, points, coordinates) {
     let totalDistance = 0;
     let totalTravelTime = 0;
     let totalOnSiteTime = 0;
+    let currentTime = new Date();
+    currentTime.setSeconds(0, 0);
 
     for (let i = 0; i < route.length - 1; i++) {
         const from = route[i];
@@ -361,7 +659,10 @@ function calculateRouteDetails(route, matrix, startPoint, points, coordinates) {
         totalDistance += distance;
         totalTravelTime += duration;
 
-        let fromAddress, toAddress, onSiteTime = 0;
+        // Calculer l'heure d'arrivée
+        currentTime = new Date(currentTime.getTime() + duration * 60000);
+
+        let fromAddress, toAddress, onSiteTime = 0, pointData = null;
 
         if (from === 0) {
             fromAddress = startPoint;
@@ -375,6 +676,7 @@ function calculateRouteDetails(route, matrix, startPoint, points, coordinates) {
             toAddress = startPoint;
         } else {
             toAddress = points[to - 1].address;
+            pointData = points[to - 1];
         }
 
         steps.push({
@@ -384,11 +686,18 @@ function calculateRouteDetails(route, matrix, startPoint, points, coordinates) {
             distance: distance.toFixed(2),
             travelTime: duration.toFixed(0),
             onSiteTime: onSiteTime,
+            arrivalTime: new Date(currentTime),
+            pointData: pointData,
             coordinates: {
                 from: coordinates[from],
                 to: coordinates[to]
             }
         });
+
+        // Ajouter le temps sur place pour le prochain calcul
+        if (to !== 0 && pointData) {
+            currentTime = new Date(currentTime.getTime() + pointData.timeOnSite * 60000);
+        }
     }
 
     return {
@@ -445,6 +754,41 @@ function displayResults(routeDetails) {
         const isLastStep = index === steps.length - 1;
         const isFirstStep = index === 0;
 
+        // Formater l'heure d'arrivée
+        const arrivalTimeStr = step.arrivalTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+        // Vérifier les contraintes
+        let constraintHTML = '';
+        let constraintStatus = '';
+        if (step.pointData && step.pointData.timeConstraint && step.pointData.timeConstraint !== 'none') {
+            const constraint = step.pointData.timeConstraint;
+            const constraintTime = step.pointData.constraintTime;
+            const [constraintHour, constraintMinute] = constraintTime.split(':').map(Number);
+            const constraintDate = new Date(step.arrivalTime);
+            constraintDate.setHours(constraintHour, constraintMinute, 0, 0);
+
+            let isRespected = true;
+            let constraintLabel = '';
+
+            if (constraint === 'before') {
+                constraintLabel = `Avant ${constraintTime}`;
+                isRespected = step.arrivalTime <= constraintDate;
+            } else if (constraint === 'at') {
+                constraintLabel = `À ${constraintTime}`;
+                const diff = Math.abs(step.arrivalTime - constraintDate) / 60000;
+                isRespected = diff <= 15;
+            } else if (constraint === 'after') {
+                constraintLabel = `Après ${constraintTime}`;
+                isRespected = step.arrivalTime >= constraintDate;
+            }
+
+            constraintHTML = `
+                <span class="px-3 py-1 ${isRespected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} rounded-full font-medium text-xs">
+                    ${isRespected ? '✓' : '⚠️'} ${constraintLabel}
+                </span>
+            `;
+        }
+
         html += `
             <div class="result-card border-l-4 ${isLastStep ? 'border-green-500' : 'border-indigo-500'} bg-white p-4 rounded-lg shadow-sm">
                 <div class="flex items-start gap-3">
@@ -460,6 +804,13 @@ function displayResults(routeDetails) {
                             <div class="text-xs text-gray-500 mb-1">Vers:</div>
                             <div class="font-medium text-gray-800">${step.to}</div>
                         </div>
+                        ${!isLastStep ? `
+                            <div class="mb-2 text-sm">
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full font-medium">
+                                    🕐 Arrivée: ${arrivalTimeStr}
+                                </span>
+                            </div>
+                        ` : ''}
                         <div class="flex flex-wrap gap-2 text-sm">
                             <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
                                 🚗 ${step.distance} km
@@ -472,6 +823,7 @@ function displayResults(routeDetails) {
                                     📍 ${step.onSiteTime} min sur place
                                 </span>
                             ` : ''}
+                            ${constraintHTML}
                         </div>
                     </div>
                 </div>
