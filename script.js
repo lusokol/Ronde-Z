@@ -2,6 +2,7 @@
 // ==========================================
 
 // Configuration et initialisation
+const API_KEY_DEFAULT = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjIyM2MzN2UyOWQ4ZDRhMDJiMjU5OTI5ZjVjY2QyODI1IiwiaCI6Im11cm11cjY0In0='; // Clé API par défaut
 const API_KEY_STORAGE = 'ors_api_key';
 const POINTS_STORAGE = 'ronde_points';
 const FAVORITES_STORAGE = 'favorite_points';
@@ -24,16 +25,21 @@ const toggleFavoritesBtn = document.getElementById('toggleFavorites');
 const favoritesContainer = document.getElementById('favoritesContainer');
 const favoritesList = document.getElementById('favoritesList');
 const noFavoritesMessage = document.getElementById('noFavoritesMessage');
+const favoritesSearchInput = document.getElementById('favoritesSearch');
+const favoritesSortSelect = document.getElementById('favoritesSort');
 
 // ==========================================
 // Initialisation au chargement de la page
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Charger la clé API sauvegardée
+    // Charger la clé API sauvegardée ou utiliser la clé par défaut
     const savedApiKey = localStorage.getItem(API_KEY_STORAGE);
     if (savedApiKey) {
         apiKeyInput.value = savedApiKey;
+    } else {
+        apiKeyInput.value = API_KEY_DEFAULT;
+        localStorage.setItem(API_KEY_STORAGE, API_KEY_DEFAULT);
     }
 
     // Charger les points favoris
@@ -60,6 +66,14 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleFavoritesBtn.addEventListener('click', () => {
         favoritesContainer.classList.toggle('hidden');
     });
+
+    // Événements pour les favoris
+    if (favoritesSearchInput) {
+        favoritesSearchInput.addEventListener('input', filterFavorites);
+    }
+    if (favoritesSortSelect) {
+        favoritesSortSelect.addEventListener('change', loadFavorites);
+    }
 });
 
 // ==========================================
