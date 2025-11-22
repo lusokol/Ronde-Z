@@ -1,26 +1,59 @@
 {
+  "cols": [
+    {
+      "id": "col-1",
+      "name": "COL Nord Paris"
+    },
+    {
+      "id": "col-2",
+      "name": "COL Sud Paris"
+    }
+  ],
+  "secteurs": [
+    {
+      "id": "sect-1",
+      "name": "Secteur Centre",
+      "colId": "col-1"
+    },
+    {
+      "id": "sect-2",
+      "name": "Secteur Ouest",
+      "colId": "col-1"
+    },
+    {
+      "id": "sect-3",
+      "name": "Secteur Est",
+      "colId": "col-2"
+    }
+  ],
   "favorites": [
     {
+      "id": "fav-1",
       "name": "Exemple - Bureau Principal",
       "address": "10 Rue de Rivoli, 75001 Paris",
       "time": 30,
       "timeConstraint": "none",
-      "constraintTime": "09:00"
+      "constraintTime": "09:00",
+      "secteurId": "sect-1"
     },
     {
+      "id": "fav-2",
       "name": "Exemple - Client A",
       "address": "25 Avenue des Champs-Élysées, 75008 Paris",
       "time": 45,
       "timeConstraint": "before",
-      "constraintTime": "12:00"
+      "constraintTime": "12:00",
+      "secteurId": "sect-2"
     },
     {
+      "id": "fav-3",
       "name": "Exemple - Entrepôt",
       "address": "150 Boulevard Haussmann, 75008 Paris",
       "time": 60,
       "timeConstraint": "after",
-      "constraintTime": "14:00"
+      "constraintTime": "14:00",
+      "secteurId": "sect-3"
     }
   ],
-  "version": "1.0"
+  "version": "2.0"
 }

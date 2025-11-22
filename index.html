@@ -52,6 +52,9 @@
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-semibold text-gray-800">⭐ Points favoris</h2>
                 <div class="flex gap-2">
+                    <button type="button" onclick="createNewCOL()" class="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm">
+                        + COL
+                    </button>
                     <button type="button" onclick="exportData()" class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm">
                         📥 Exporter
                     </button>
@@ -65,23 +68,7 @@
                 </div>
             </div>
             <div id="favoritesContainer" class="hidden">
-                <!-- Barre de recherche et tri -->
-                <div class="mb-4 flex gap-3">
-                    <div class="flex-1">
-                        <input type="text" id="favoritesSearch" placeholder="🔍 Rechercher un favori..."
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    </div>
-                    <select id="favoritesSort" class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                        <option value="name-asc">Nom (A-Z)</option>
-                        <option value="name-desc">Nom (Z-A)</option>
-                        <option value="address-asc">Adresse (A-Z)</option>
-                        <option value="address-desc">Adresse (Z-A)</option>
-                        <option value="time-asc">Temps (↑)</option>
-                        <option value="time-desc">Temps (↓)</option>
-                    </select>
-                </div>
-
-                <div id="favoritesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+                <div id="favoritesList" class="mb-3">
                     <!-- Les points favoris seront affichés ici -->
                 </div>
                 <p id="noFavoritesMessage" class="text-gray-400 text-sm text-center py-4">

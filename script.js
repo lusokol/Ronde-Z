@@ -6,6 +6,8 @@ const API_KEY_DEFAULT = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjI
 const API_KEY_STORAGE = 'ors_api_key';
 const POINTS_STORAGE = 'ronde_points';
 const FAVORITES_STORAGE = 'favorite_points';
+const COLS_STORAGE = 'cols_data';
+const SECTEURS_STORAGE = 'secteurs_data';
 let pointsCounter = 0;
 
 // Éléments DOM
@@ -92,6 +94,16 @@ async function loadInitialData() {
             const response = await fetch('data.json');
             if (response.ok) {
                 const data = await response.json();
+
+                // Charger les COLs depuis le fichier JSON
+                if (data.cols && data.cols.length > 0) {
+                    localStorage.setItem(COLS_STORAGE, JSON.stringify(data.cols));
+                }
+
+                // Charger les Secteurs depuis le fichier JSON
+                if (data.secteurs && data.secteurs.length > 0) {
+                    localStorage.setItem(SECTEURS_STORAGE, JSON.stringify(data.secteurs));
+                }
 
                 // Charger les favoris depuis le fichier JSON
                 if (data.favorites && data.favorites.length > 0) {
@@ -289,6 +301,129 @@ function loadSavedPoints() {
 }
 
 // ==========================================
+// Gestion des COLs et Secteurs
+// ==========================================
+
+function generateId(prefix) {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function getCols() {
+    const savedCols = localStorage.getItem(COLS_STORAGE);
+    try {
+        return savedCols ? JSON.parse(savedCols) : [];
+    } catch (e) {
+        console.error('Erreur lors du chargement des COLs:', e);
+        return [];
+    }
+}
+
+function getSecteurs() {
+    const savedSecteurs = localStorage.getItem(SECTEURS_STORAGE);
+    try {
+        return savedSecteurs ? JSON.parse(savedSecteurs) : [];
+    } catch (e) {
+        console.error('Erreur lors du chargement des Secteurs:', e);
+        return [];
+    }
+}
+
+function saveCols(cols) {
+    localStorage.setItem(COLS_STORAGE, JSON.stringify(cols));
+}
+
+function saveSecteurs(secteurs) {
+    localStorage.setItem(SECTEURS_STORAGE, JSON.stringify(secteurs));
+}
+
+function addCOL(name) {
+    const cols = getCols();
+    const newCol = {
+        id: generateId('col'),
+        name: name
+    };
+    cols.push(newCol);
+    saveCols(cols);
+    return newCol;
+}
+
+function addSecteur(name, colId) {
+    const secteurs = getSecteurs();
+    const newSecteur = {
+        id: generateId('sect'),
+        name: name,
+        colId: colId
+    };
+    secteurs.push(newSecteur);
+    saveSecteurs(secteurs);
+    return newSecteur;
+}
+
+function deleteCOL(colId) {
+    // Supprimer le COL
+    let cols = getCols();
+    cols = cols.filter(col => col.id !== colId);
+    saveCols(cols);
+
+    // Supprimer tous les secteurs de ce COL
+    let secteurs = getSecteurs();
+    const secteurIds = secteurs.filter(s => s.colId === colId).map(s => s.id);
+    secteurs = secteurs.filter(s => s.colId !== colId);
+    saveSecteurs(secteurs);
+
+    // Supprimer tous les favoris de ces secteurs
+    let favorites = getFavorites();
+    favorites = favorites.filter(fav => !secteurIds.includes(fav.secteurId));
+    saveFavoritesData(favorites);
+}
+
+function deleteSecteur(secteurId) {
+    // Supprimer le secteur
+    let secteurs = getSecteurs();
+    secteurs = secteurs.filter(s => s.id !== secteurId);
+    saveSecteurs(secteurs);
+
+    // Supprimer tous les favoris de ce secteur
+    let favorites = getFavorites();
+    favorites = favorites.filter(fav => fav.secteurId !== secteurId);
+    saveFavoritesData(favorites);
+}
+
+function getFavorites() {
+    const savedFavorites = localStorage.getItem(FAVORITES_STORAGE);
+    try {
+        return savedFavorites ? JSON.parse(savedFavorites) : [];
+    } catch (e) {
+        console.error('Erreur lors du chargement des favoris:', e);
+        return [];
+    }
+}
+
+function saveFavoritesData(favorites) {
+    localStorage.setItem(FAVORITES_STORAGE, JSON.stringify(favorites));
+}
+
+function getColById(colId) {
+    const cols = getCols();
+    return cols.find(col => col.id === colId);
+}
+
+function getSecteurById(secteurId) {
+    const secteurs = getSecteurs();
+    return secteurs.find(s => s.id === secteurId);
+}
+
+function getSecteursByColId(colId) {
+    const secteurs = getSecteurs();
+    return secteurs.filter(s => s.colId === colId);
+}
+
+function getFavoritesBySecteurId(secteurId) {
+    const favorites = getFavorites();
+    return favorites.filter(fav => fav.secteurId === secteurId);
+}
+
+// ==========================================
 // Gestion des points favoris
 // ==========================================
 
@@ -312,30 +447,169 @@ function saveFavorite(button) {
         return;
     }
 
-    // Charger les favoris existants
-    let favorites = [];
-    const savedFavorites = localStorage.getItem(FAVORITES_STORAGE);
-    if (savedFavorites) {
-        try {
-            favorites = JSON.parse(savedFavorites);
-        } catch (e) {
-            console.error('Erreur lors du chargement des favoris:', e);
+    // Ouvrir le modal de sélection du secteur
+    showSecteurSelectionModal(name, address, time, timeConstraint, constraintTime);
+}
+
+function showSecteurSelectionModal(name, address, time, timeConstraint, constraintTime) {
+    const cols = getCols();
+    const secteurs = getSecteurs();
+
+    if (cols.length === 0) {
+        if (confirm('Aucun COL n\'existe. Voulez-vous en créer un maintenant ?')) {
+            const colName = prompt('Nom du COL :');
+            if (colName && colName.trim()) {
+                const newCol = addCOL(colName.trim());
+                const secteurName = prompt('Nom du Secteur :');
+                if (secteurName && secteurName.trim()) {
+                    const newSecteur = addSecteur(secteurName.trim(), newCol.id);
+                    completeFavoriteSave(name, address, time, timeConstraint, constraintTime, newSecteur.id);
+                    return;
+                }
+            }
         }
+        return;
     }
+
+    // Créer un modal HTML pour la sélection
+    let modalHTML = `
+        <div id="secteurModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+            <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Sélectionner un Secteur</h3>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">COL :</label>
+                        <select id="colSelect" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+                            <option value="">-- Sélectionner un COL --</option>
+                            ${cols.map(col => `<option value="${col.id}">${col.name}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Secteur :</label>
+                        <select id="secteurSelect" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500" disabled>
+                            <option value="">-- Sélectionner d'abord un COL --</option>
+                        </select>
+                    </div>
+
+                    <div class="flex gap-2 mt-6">
+                        <button id="createSecteurBtn" class="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" disabled>
+                            Créer nouveau secteur
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mt-6">
+                    <button id="cancelSecteurBtn" class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                        Annuler
+                    </button>
+                    <button id="confirmSecteurBtn" class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                        Confirmer
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Ajouter le modal au DOM
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = modalHTML;
+    document.body.appendChild(modalContainer);
+
+    // Récupérer les éléments
+    const modal = document.getElementById('secteurModal');
+    const colSelect = document.getElementById('colSelect');
+    const secteurSelect = document.getElementById('secteurSelect');
+    const createSecteurBtn = document.getElementById('createSecteurBtn');
+    const cancelBtn = document.getElementById('cancelSecteurBtn');
+    const confirmBtn = document.getElementById('confirmSecteurBtn');
+
+    // Gérer le changement de COL
+    colSelect.addEventListener('change', () => {
+        const colId = colSelect.value;
+        if (colId) {
+            const colSecteurs = getSecteursByColId(colId);
+            secteurSelect.disabled = false;
+            secteurSelect.innerHTML = '<option value="">-- Sélectionner un Secteur --</option>' +
+                colSecteurs.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+            createSecteurBtn.disabled = false;
+        } else {
+            secteurSelect.disabled = true;
+            secteurSelect.innerHTML = '<option value="">-- Sélectionner d\'abord un COL --</option>';
+            createSecteurBtn.disabled = true;
+        }
+    });
+
+    // Gérer la création d'un nouveau secteur
+    createSecteurBtn.addEventListener('click', () => {
+        const colId = colSelect.value;
+        if (!colId) {
+            alert('Veuillez d\'abord sélectionner un COL');
+            return;
+        }
+        const secteurName = prompt('Nom du nouveau Secteur :');
+        if (secteurName && secteurName.trim()) {
+            const newSecteur = addSecteur(secteurName.trim(), colId);
+            // Recharger les secteurs dans le select
+            const colSecteurs = getSecteursByColId(colId);
+            secteurSelect.innerHTML = '<option value="">-- Sélectionner un Secteur --</option>' +
+                colSecteurs.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+            secteurSelect.value = newSecteur.id;
+        }
+    });
+
+    // Gérer l'annulation
+    cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(modalContainer);
+    });
+
+    // Gérer la confirmation
+    confirmBtn.addEventListener('click', () => {
+        const secteurId = secteurSelect.value;
+        if (!secteurId) {
+            alert('Veuillez sélectionner un Secteur');
+            return;
+        }
+        document.body.removeChild(modalContainer);
+        completeFavoriteSave(name, address, time, timeConstraint, constraintTime, secteurId);
+    });
+
+    // Fermer en cliquant à l'extérieur
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modalContainer);
+        }
+    });
+}
+
+function completeFavoriteSave(name, address, time, timeConstraint, constraintTime, secteurId) {
+    // Charger les favoris existants
+    let favorites = getFavorites();
 
     // Vérifier si le favori existe déjà
     const existingIndex = favorites.findIndex(fav => fav.name === name);
+    const favoriteData = {
+        id: existingIndex !== -1 ? favorites[existingIndex].id : generateId('fav'),
+        name,
+        address,
+        time,
+        timeConstraint,
+        constraintTime,
+        secteurId
+    };
+
     if (existingIndex !== -1) {
         if (!confirm(`Un favori avec le nom "${name}" existe déjà. Voulez-vous le remplacer ?`)) {
             return;
         }
-        favorites[existingIndex] = { name, address, time, timeConstraint, constraintTime };
+        favorites[existingIndex] = favoriteData;
     } else {
-        favorites.push({ name, address, time, timeConstraint, constraintTime });
+        favorites.push(favoriteData);
     }
 
     // Sauvegarder
-    localStorage.setItem(FAVORITES_STORAGE, JSON.stringify(favorites));
+    saveFavoritesData(favorites);
 
     // Recharger l'affichage des favoris
     loadFavorites();
@@ -345,91 +619,153 @@ function saveFavorite(button) {
 }
 
 function loadFavorites() {
-    const savedFavorites = localStorage.getItem(FAVORITES_STORAGE);
-    let favorites = [];
-
-    if (savedFavorites) {
-        try {
-            favorites = JSON.parse(savedFavorites);
-        } catch (e) {
-            console.error('Erreur lors du chargement des favoris:', e);
-        }
-    }
-
-    // Trier les favoris selon la sélection
-    if (favoritesSortSelect) {
-        const sortValue = favoritesSortSelect.value;
-        favorites = sortFavorites(favorites, sortValue);
-    }
+    const cols = getCols();
+    const secteurs = getSecteurs();
+    const favorites = getFavorites();
 
     favoritesList.innerHTML = '';
 
-    if (favorites.length === 0) {
+    if (cols.length === 0 && favorites.length === 0) {
         noFavoritesMessage.classList.remove('hidden');
+        noFavoritesMessage.textContent = 'Aucun point favori enregistré. Ajoutez des points ci-dessous et cliquez sur "Sauvegarder comme favori"';
     } else {
         noFavoritesMessage.classList.add('hidden');
 
-        favorites.forEach((favorite, index) => {
-            const favoriteCard = document.createElement('div');
-            favoriteCard.className = 'favorite-card border border-indigo-200 rounded-lg p-3 bg-indigo-50 hover:bg-indigo-100 transition-colors';
+        // Afficher la structure hiérarchique
+        cols.forEach(col => {
+            const colSecteurs = getSecteursByColId(col.id);
 
-            const constraintLabel = {
-                'none': '',
-                'before': `⏰ Avant ${favorite.constraintTime}`,
-                'at': `⏰ À ${favorite.constraintTime}`,
-                'after': `⏰ Après ${favorite.constraintTime}`
-            }[favorite.timeConstraint];
-
-            // Formater le temps (convertir minutes en heures + minutes)
-            const totalMinutes = parseInt(favorite.time || 0);
-            const hours = Math.floor(totalMinutes / 60);
-            const minutes = totalMinutes % 60;
-            let timeLabel = '';
-            if (hours > 0 && minutes > 0) {
-                timeLabel = `${hours}h ${minutes}min`;
-            } else if (hours > 0) {
-                timeLabel = `${hours}h`;
-            } else {
-                timeLabel = `${minutes}min`;
+            if (colSecteurs.length === 0 && getFavorites().filter(f => {
+                const sect = getSecteurById(f.secteurId);
+                return sect && sect.colId === col.id;
+            }).length === 0) {
+                return; // Ignorer les COLs vides
             }
 
-            favoriteCard.innerHTML = `
-                <div class="flex justify-between items-start mb-2">
-                    <h4 class="font-semibold text-indigo-900 text-sm">${favorite.name}</h4>
-                    <button onclick="deleteFavorite('${favorite.name}')"
-                            class="text-red-500 hover:text-red-700 text-xs">
-                        ✕
-                    </button>
+            // Créer le conteneur COL
+            const colDiv = document.createElement('div');
+            colDiv.className = 'col-span-full mb-4';
+            colDiv.innerHTML = `
+                <div class="bg-gradient-to-r from-purple-500 to-indigo-600 text-white p-3 rounded-t-lg flex justify-between items-center">
+                    <h3 class="font-bold text-sm">${col.name}</h3>
+                    <div class="flex gap-2">
+                        <button onclick="addSecteurToCOL('${col.id}')" class="px-2 py-1 bg-white bg-opacity-20 hover:bg-opacity-30 rounded text-xs">
+                            + Secteur
+                        </button>
+                        <button onclick="deleteCOL('${col.id}')" class="px-2 py-1 bg-red-500 hover:bg-red-600 rounded text-xs">
+                            Supprimer
+                        </button>
+                    </div>
                 </div>
-                <p class="text-xs text-gray-600 mb-2">${favorite.address}</p>
-                <div class="flex justify-between items-center text-xs">
-                    <span class="text-indigo-700">⏱️ ${timeLabel}</span>
-                    ${constraintLabel ? `<span class="text-orange-700">${constraintLabel}</span>` : ''}
+                <div class="border border-purple-200 rounded-b-lg p-3 bg-purple-50" id="col-${col.id}">
                 </div>
-                <button onclick="useFavorite('${favorite.name}')"
-                        class="mt-2 w-full px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-xs">
-                    ➕ Utiliser
-                </button>
             `;
+            favoritesList.appendChild(colDiv);
 
-            favoritesList.appendChild(favoriteCard);
+            const colContainer = document.getElementById(`col-${col.id}`);
+
+            // Afficher les secteurs de ce COL
+            colSecteurs.forEach(secteur => {
+                const secteurFavorites = getFavoritesBySecteurId(secteur.id);
+
+                const secteurDiv = document.createElement('div');
+                secteurDiv.className = 'mb-3';
+                secteurDiv.innerHTML = `
+                    <div class="bg-indigo-100 p-2 rounded-t flex justify-between items-center">
+                        <h4 class="font-semibold text-indigo-900 text-xs">${secteur.name}</h4>
+                        <button onclick="deleteSecteur('${secteur.id}')" class="px-2 py-1 bg-red-400 hover:bg-red-500 text-white rounded text-xs">
+                            Supprimer
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 p-2 bg-white border border-indigo-100 rounded-b" id="secteur-${secteur.id}">
+                    </div>
+                `;
+                colContainer.appendChild(secteurDiv);
+
+                const secteurContainer = document.getElementById(`secteur-${secteur.id}`);
+
+                // Afficher les favoris de ce secteur
+                secteurFavorites.forEach(favorite => {
+                    const favoriteCard = document.createElement('div');
+                    favoriteCard.className = 'favorite-card border border-indigo-200 rounded-lg p-2 bg-white hover:bg-indigo-50 transition-colors';
+                    favoriteCard.dataset.name = favorite.name;
+                    favoriteCard.dataset.address = favorite.address;
+
+                    const constraintLabel = {
+                        'none': '',
+                        'before': `Avant ${favorite.constraintTime}`,
+                        'at': `À ${favorite.constraintTime}`,
+                        'after': `Après ${favorite.constraintTime}`
+                    }[favorite.timeConstraint];
+
+                    // Formater le temps
+                    const totalMinutes = parseInt(favorite.time || 0);
+                    const hours = Math.floor(totalMinutes / 60);
+                    const minutes = totalMinutes % 60;
+                    let timeLabel = '';
+                    if (hours > 0 && minutes > 0) {
+                        timeLabel = `${hours}h ${minutes}min`;
+                    } else if (hours > 0) {
+                        timeLabel = `${hours}h`;
+                    } else {
+                        timeLabel = `${minutes}min`;
+                    }
+
+                    favoriteCard.innerHTML = `
+                        <div class="flex justify-between items-start mb-1">
+                            <h5 class="font-semibold text-indigo-900 text-xs">${favorite.name}</h5>
+                            <button onclick="deleteFavoriteById('${favorite.id}')"
+                                    class="text-red-500 hover:text-red-700 text-xs">
+                                ✕
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-600 mb-1 truncate" title="${favorite.address}">${favorite.address}</p>
+                        <div class="flex justify-between items-center text-xs mb-2">
+                            <span class="text-indigo-700">${timeLabel}</span>
+                            ${constraintLabel ? `<span class="text-orange-700 text-xs">${constraintLabel}</span>` : ''}
+                        </div>
+                        <div class="flex gap-1">
+                            <button onclick="useFavoriteById('${favorite.id}')"
+                                    class="flex-1 px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-xs">
+                                Ajouter
+                            </button>
+                            <button onclick="useAsStartPoint('${favorite.id}')"
+                                    class="flex-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-xs"
+                                    title="Utiliser comme point de départ">
+                                Départ
+                            </button>
+                        </div>
+                    `;
+
+                    secteurContainer.appendChild(favoriteCard);
+                });
+            });
         });
     }
 }
 
 function useFavorite(favoriteName) {
-    const savedFavorites = localStorage.getItem(FAVORITES_STORAGE);
-    if (!savedFavorites) return;
+    const favorites = getFavorites();
+    const favorite = favorites.find(fav => fav.name === favoriteName);
+    if (favorite) {
+        addPoint(favorite);
+    }
+}
 
-    try {
-        const favorites = JSON.parse(savedFavorites);
-        const favorite = favorites.find(fav => fav.name === favoriteName);
+function useFavoriteById(favoriteId) {
+    const favorites = getFavorites();
+    const favorite = favorites.find(fav => fav.id === favoriteId);
+    if (favorite) {
+        addPoint(favorite);
+    }
+}
 
-        if (favorite) {
-            addPoint(favorite);
-        }
-    } catch (e) {
-        console.error('Erreur lors de l\'utilisation du favori:', e);
+function useAsStartPoint(favoriteId) {
+    const favorites = getFavorites();
+    const favorite = favorites.find(fav => fav.id === favoriteId);
+    if (favorite) {
+        startPointInput.value = favorite.address;
+        showError(`Point de départ défini : ${favorite.name}`);
     }
 }
 
@@ -437,17 +773,39 @@ function deleteFavorite(favoriteName) {
     if (!confirm(`Voulez-vous vraiment supprimer le favori "${favoriteName}" ?`)) {
         return;
     }
+    let favorites = getFavorites();
+    favorites = favorites.filter(fav => fav.name !== favoriteName);
+    saveFavoritesData(favorites);
+    loadFavorites();
+}
 
-    const savedFavorites = localStorage.getItem(FAVORITES_STORAGE);
-    if (!savedFavorites) return;
+function deleteFavoriteById(favoriteId) {
+    const favorites = getFavorites();
+    const favorite = favorites.find(fav => fav.id === favoriteId);
+    if (!favorite) return;
 
-    try {
-        let favorites = JSON.parse(savedFavorites);
-        favorites = favorites.filter(fav => fav.name !== favoriteName);
-        localStorage.setItem(FAVORITES_STORAGE, JSON.stringify(favorites));
+    if (!confirm(`Voulez-vous vraiment supprimer le favori "${favorite.name}" ?`)) {
+        return;
+    }
+    const updatedFavorites = favorites.filter(fav => fav.id !== favoriteId);
+    saveFavoritesData(updatedFavorites);
+    loadFavorites();
+}
+
+function addSecteurToCOL(colId) {
+    const secteurName = prompt('Nom du nouveau Secteur :');
+    if (secteurName && secteurName.trim()) {
+        addSecteur(secteurName.trim(), colId);
         loadFavorites();
-    } catch (e) {
-        console.error('Erreur lors de la suppression du favori:', e);
+    }
+}
+
+function createNewCOL() {
+    const colName = prompt('Nom du nouveau COL :');
+    if (colName && colName.trim()) {
+        addCOL(colName.trim());
+        loadFavorites();
+        showError(`COL "${colName.trim()}" créé avec succès !`);
     }
 }
 
@@ -517,10 +875,12 @@ function filterFavorites() {
 
 function exportData() {
     const data = {
-        favorites: JSON.parse(localStorage.getItem(FAVORITES_STORAGE) || '[]'),
+        cols: getCols(),
+        secteurs: getSecteurs(),
+        favorites: getFavorites(),
         points: JSON.parse(localStorage.getItem(POINTS_STORAGE) || '[]'),
         exportDate: new Date().toISOString(),
-        version: '1.0'
+        version: '2.0'
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -550,12 +910,25 @@ function importData(event) {
                 throw new Error('Format de fichier invalide');
             }
 
+            // Construire le message de confirmation
+            let confirmMsg = `Voulez-vous vraiment importer ces données ?\n\n`;
+            if (data.cols) confirmMsg += `${data.cols.length} COL(s)\n`;
+            if (data.secteurs) confirmMsg += `${data.secteurs.length} Secteur(s)\n`;
+            confirmMsg += `${data.favorites.length} Adresse(s)\n\n`;
+            confirmMsg += `Cela écrasera vos données actuelles.`;
+
             // Demander confirmation
-            if (!confirm(`Voulez-vous vraiment importer ces données ?\n\n${data.favorites.length} favoris seront importés.\nCela écrasera vos données actuelles.`)) {
+            if (!confirm(confirmMsg)) {
                 return;
             }
 
             // Importer les données
+            if (data.cols) {
+                localStorage.setItem(COLS_STORAGE, JSON.stringify(data.cols));
+            }
+            if (data.secteurs) {
+                localStorage.setItem(SECTEURS_STORAGE, JSON.stringify(data.secteurs));
+            }
             localStorage.setItem(FAVORITES_STORAGE, JSON.stringify(data.favorites));
             if (data.points) {
                 localStorage.setItem(POINTS_STORAGE, JSON.stringify(data.points));
@@ -1064,6 +1437,11 @@ function generatePDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
+    // Fonction pour retirer les émojis
+    function removeEmojis(text) {
+        return text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '').trim();
+    }
+
     // Couleurs
     const primaryColor = [99, 102, 241]; // Indigo
     const secondaryColor = [75, 85, 99]; // Gris foncé
@@ -1076,17 +1454,17 @@ function generatePDF() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
     doc.setFont(undefined, 'bold');
-    doc.text('ITINÉRAIRE DE RONDE OPTIMISÉ', 105, 15, { align: 'center' });
+    doc.text('ITINERAIRE DE RONDE OPTIMISE', 105, 15, { align: 'center' });
 
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
-    doc.text(`Généré le ${new Date().toLocaleString('fr-FR')}`, 105, 25, { align: 'center' });
+    doc.text(`Genere le ${new Date().toLocaleString('fr-FR')}`, 105, 25, { align: 'center' });
 
     // Statistiques globales
     const stats = resultsContainer.querySelectorAll('.stat-card');
     if (stats.length >= 2) {
-        const totalTime = stats[0].querySelector('.stat-value').textContent.trim();
-        const totalDistance = stats[1].querySelector('.stat-value').textContent.trim();
+        const totalTime = removeEmojis(stats[0].querySelector('.stat-value').textContent.trim());
+        const totalDistance = removeEmojis(stats[1].querySelector('.stat-value').textContent.trim());
 
         let y = 50;
 
@@ -1122,13 +1500,13 @@ function generatePDF() {
         doc.setTextColor(...secondaryColor);
         doc.setFontSize(12);
         doc.setFont(undefined, 'bold');
-        doc.text('RÉSUMÉ', 20, y + 8);
+        doc.text('RESUME', 20, y + 8);
 
         doc.setFontSize(10);
         doc.setFont(undefined, 'normal');
         const summaryTexts = summary.querySelectorAll('p');
         summaryTexts.forEach((p, index) => {
-            doc.text(p.textContent.trim(), 20, y + 16 + (index * 6));
+            doc.text(removeEmojis(p.textContent.trim()), 20, y + 16 + (index * 6));
         });
     }
 
@@ -1137,7 +1515,7 @@ function generatePDF() {
     doc.setTextColor(...primaryColor);
     doc.setFontSize(14);
     doc.setFont(undefined, 'bold');
-    doc.text('ITINÉRAIRE DÉTAILLÉ', 15, y);
+    doc.text('ITINERAIRE DETAILLE', 15, y);
 
     y += 8;
 
@@ -1149,11 +1527,11 @@ function generatePDF() {
             y = 20;
         }
 
-        const stepNumber = step.querySelector('.step-badge').textContent;
+        const stepNumber = removeEmojis(step.querySelector('.step-badge').textContent);
         const fromEl = step.querySelectorAll('.font-medium')[0];
         const toEl = step.querySelectorAll('.font-medium')[1];
-        const from = fromEl ? fromEl.textContent : '';
-        const to = toEl ? toEl.textContent : '';
+        const from = fromEl ? removeEmojis(fromEl.textContent) : '';
+        const to = toEl ? removeEmojis(toEl.textContent) : '';
 
         // Fond de l'étape
         const isLastStep = index === steps.length - 1;
@@ -1187,7 +1565,7 @@ function generatePDF() {
         let infoX = 30;
 
         badges.forEach((badge, badgeIndex) => {
-            const text = badge.textContent.trim();
+            const text = removeEmojis(badge.textContent.trim());
             if (text && badgeIndex < 4) {
                 doc.setFontSize(8);
                 doc.setFont(undefined, 'normal');
