@@ -32,7 +32,7 @@ const favoritesSortSelect = document.getElementById('favoritesSort');
 // Initialisation au chargement de la page
 // ==========================================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Charger la clé API sauvegardée ou utiliser la clé par défaut
     const savedApiKey = localStorage.getItem(API_KEY_STORAGE);
     if (savedApiKey) {
@@ -41,6 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
         apiKeyInput.value = API_KEY_DEFAULT;
         localStorage.setItem(API_KEY_STORAGE, API_KEY_DEFAULT);
     }
+
+    // Charger les données depuis data.json si c'est la première visite
+    await loadInitialData();
 
     // Charger les points favoris
     loadFavorites();
@@ -75,6 +78,35 @@ document.addEventListener('DOMContentLoaded', () => {
         favoritesSortSelect.addEventListener('change', loadFavorites);
     }
 });
+
+// ==========================================
+// Chargement des données initiales
+// ==========================================
+
+async function loadInitialData() {
+    try {
+        // Vérifier si c'est la première visite ou si on veut forcer le chargement
+        const hasLoadedBefore = localStorage.getItem('data_loaded');
+
+        if (!hasLoadedBefore) {
+            const response = await fetch('data.json');
+            if (response.ok) {
+                const data = await response.json();
+
+                // Charger les favoris depuis le fichier JSON
+                if (data.favorites && data.favorites.length > 0) {
+                    localStorage.setItem(FAVORITES_STORAGE, JSON.stringify(data.favorites));
+                }
+
+                // Marquer comme chargé
+                localStorage.setItem('data_loaded', 'true');
+                console.log('Données initiales chargées depuis data.json');
+            }
+        }
+    } catch (error) {
+        console.log('Pas de fichier data.json ou erreur de chargement, utilisation des données locales');
+    }
+}
 
 // ==========================================
 // Gestion du formulaire et des points

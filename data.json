@@ -1,5 +1,26 @@
 {
-  "favorites": [],
-  "lastUpdate": "2025-11-22T00:00:00.000Z",
+  "favorites": [
+    {
+      "name": "Exemple - Bureau Principal",
+      "address": "10 Rue de Rivoli, 75001 Paris",
+      "time": 30,
+      "timeConstraint": "none",
+      "constraintTime": "09:00"
+    },
+    {
+      "name": "Exemple - Client A",
+      "address": "25 Avenue des Champs-Élysées, 75008 Paris",
+      "time": 45,
+      "timeConstraint": "before",
+      "constraintTime": "12:00"
+    },
+    {
+      "name": "Exemple - Entrepôt",
+      "address": "150 Boulevard Haussmann, 75008 Paris",
+      "time": 60,
+      "timeConstraint": "after",
+      "constraintTime": "14:00"
+    }
+  ],
   "version": "1.0"
 }
