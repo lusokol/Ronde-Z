@@ -1513,9 +1513,22 @@ function generatePDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    // Fonction pour retirer les émojis
+    // Fonction pour retirer les émojis et caractères spéciaux
     function removeEmojis(text) {
-        return text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '').trim();
+        return text
+            // Retirer tous les émojis et symboles Unicode
+            .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
+            .replace(/[\u{2600}-\u{27BF}]/gu, '')
+            .replace(/[\u{2300}-\u{23FF}]/gu, '')
+            .replace(/[\u{2B00}-\u{2BFF}]/gu, '')
+            .replace(/[\u{25A0}-\u{25FF}]/gu, '')
+            // Retirer les caractères de contrôle
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+            // Ne garder que les caractères alphanumériques, espaces et ponctuation de base
+            .replace(/[^\x20-\x7E\u00C0-\u00FF]/g, '')
+            // Retirer les espaces multiples
+            .replace(/\s+/g, ' ')
+            .trim();
     }
 
     // Couleurs
