@@ -72,12 +72,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         favoritesContainer.classList.toggle('hidden');
     });
 
-    // Événements pour les favoris
-    if (favoritesSearchInput) {
-        favoritesSearchInput.addEventListener('input', filterFavorites);
-    }
-    if (favoritesSortSelect) {
-        favoritesSortSelect.addEventListener('change', loadFavorites);
+    // Événements pour le filtre COL
+    const colFilter = document.getElementById('colFilter');
+    if (colFilter) {
+        colFilter.addEventListener('change', loadFavorites);
     }
 });
 
@@ -615,13 +613,30 @@ function completeFavoriteSave(name, address, time, timeConstraint, constraintTim
     loadFavorites();
 
     // Message de confirmation
-    showError(`Point "${name}" sauvegardé dans les favoris !`);
+    showError(`Point "${name}" sauvegardé dans les favoris !`, 'success');
 }
 
 function loadFavorites() {
     const cols = getCols();
     const secteurs = getSecteurs();
     const favorites = getFavorites();
+
+    // Mettre à jour le dropdown de filtrage
+    const colFilter = document.getElementById('colFilter');
+    if (colFilter) {
+        const currentFilter = colFilter.value;
+        colFilter.innerHTML = '<option value="all">Tous les COLs</option>';
+        cols.forEach(col => {
+            const option = document.createElement('option');
+            option.value = col.id;
+            option.textContent = col.name;
+            colFilter.appendChild(option);
+        });
+        // Restaurer le filtre sélectionné
+        if (currentFilter) {
+            colFilter.value = currentFilter;
+        }
+    }
 
     favoritesList.innerHTML = '';
 
@@ -631,8 +646,15 @@ function loadFavorites() {
     } else {
         noFavoritesMessage.classList.add('hidden');
 
+        // Récupérer le filtre actuel
+        const selectedColId = colFilter ? colFilter.value : 'all';
+
         // Afficher la structure hiérarchique
         cols.forEach(col => {
+            // Appliquer le filtre
+            if (selectedColId !== 'all' && col.id !== selectedColId) {
+                return;
+            }
             const colSecteurs = getSecteursByColId(col.id);
 
             if (colSecteurs.length === 0 && getFavorites().filter(f => {
@@ -646,9 +668,12 @@ function loadFavorites() {
             const colDiv = document.createElement('div');
             colDiv.className = 'col-span-full mb-4';
             colDiv.innerHTML = `
-                <div class="bg-gradient-to-r from-purple-500 to-indigo-600 text-white p-3 rounded-t-lg flex justify-between items-center">
-                    <h3 class="font-bold text-sm">${col.name}</h3>
-                    <div class="flex gap-2">
+                <div class="bg-gradient-to-r from-purple-500 to-indigo-600 text-white p-3 rounded-t-lg flex justify-between items-center cursor-pointer" onclick="toggleCOL('${col.id}')">
+                    <div class="flex items-center gap-2">
+                        <span id="col-icon-${col.id}" class="text-white">▼</span>
+                        <h3 class="font-bold text-sm">${col.name}</h3>
+                    </div>
+                    <div class="flex gap-2" onclick="event.stopPropagation()">
                         <button onclick="addSecteurToCOL('${col.id}')" class="px-2 py-1 bg-white bg-opacity-20 hover:bg-opacity-30 rounded text-xs">
                             + Secteur
                         </button>
@@ -671,9 +696,12 @@ function loadFavorites() {
                 const secteurDiv = document.createElement('div');
                 secteurDiv.className = 'mb-3';
                 secteurDiv.innerHTML = `
-                    <div class="bg-indigo-100 p-2 rounded-t flex justify-between items-center">
-                        <h4 class="font-semibold text-indigo-900 text-xs">${secteur.name}</h4>
-                        <button onclick="deleteSecteur('${secteur.id}')" class="px-2 py-1 bg-red-400 hover:bg-red-500 text-white rounded text-xs">
+                    <div class="bg-indigo-100 p-2 rounded-t flex justify-between items-center cursor-pointer" onclick="toggleSecteur('${secteur.id}')">
+                        <div class="flex items-center gap-2">
+                            <span id="secteur-icon-${secteur.id}" class="text-indigo-900">▼</span>
+                            <h4 class="font-semibold text-indigo-900 text-xs">${secteur.name}</h4>
+                        </div>
+                        <button onclick="event.stopPropagation(); deleteSecteur('${secteur.id}')" class="px-2 py-1 bg-red-400 hover:bg-red-500 text-white rounded text-xs">
                             Supprimer
                         </button>
                     </div>
@@ -765,7 +793,7 @@ function useAsStartPoint(favoriteId) {
     const favorite = favorites.find(fav => fav.id === favoriteId);
     if (favorite) {
         startPointInput.value = favorite.address;
-        showError(`Point de départ défini : ${favorite.name}`);
+        showError(`Point de départ défini : ${favorite.name}`, 'success');
     }
 }
 
@@ -805,7 +833,33 @@ function createNewCOL() {
     if (colName && colName.trim()) {
         addCOL(colName.trim());
         loadFavorites();
-        showError(`COL "${colName.trim()}" créé avec succès !`);
+        showError(`COL "${colName.trim()}" créé avec succès !`, 'success');
+    }
+}
+
+function toggleCOL(colId) {
+    const colContainer = document.getElementById(`col-${colId}`);
+    const colIcon = document.getElementById(`col-icon-${colId}`);
+
+    if (colContainer.classList.contains('hidden')) {
+        colContainer.classList.remove('hidden');
+        colIcon.textContent = '▼';
+    } else {
+        colContainer.classList.add('hidden');
+        colIcon.textContent = '▶';
+    }
+}
+
+function toggleSecteur(secteurId) {
+    const secteurContainer = document.getElementById(`secteur-${secteurId}`);
+    const secteurIcon = document.getElementById(`secteur-icon-${secteurId}`);
+
+    if (secteurContainer.classList.contains('hidden')) {
+        secteurContainer.classList.remove('hidden');
+        secteurIcon.textContent = '▼';
+    } else {
+        secteurContainer.classList.add('hidden');
+        secteurIcon.textContent = '▶';
     }
 }
 
@@ -893,7 +947,7 @@ function exportData() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showError('Données exportées avec succès !');
+    showError('Données exportées avec succès !', 'success');
 }
 
 function importData(event) {
@@ -936,7 +990,7 @@ function importData(event) {
 
             // Recharger l'affichage
             loadFavorites();
-            showError('Données importées avec succès !');
+            showError('Données importées avec succès !', 'success');
 
         } catch (error) {
             showError(`Erreur lors de l'import: ${error.message}`);
@@ -1413,8 +1467,30 @@ function hideLoading() {
     resultsContainer.classList.remove('hidden');
 }
 
-function showError(message) {
+function showError(message, type = 'error') {
+    const messageIcon = document.getElementById('messageIcon');
+    const iconPath = document.getElementById('iconPath');
+    const messageTitle = document.getElementById('messageTitle');
+    const closeBtn = document.getElementById('closeError');
+
     errorMessage.textContent = message;
+
+    if (type === 'success') {
+        messageIcon.classList.remove('text-red-500');
+        messageIcon.classList.add('text-green-500');
+        iconPath.setAttribute('d', 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z');
+        messageTitle.textContent = 'Succès';
+        closeBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+        closeBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+    } else {
+        messageIcon.classList.remove('text-green-500');
+        messageIcon.classList.add('text-red-500');
+        iconPath.setAttribute('d', 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z');
+        messageTitle.textContent = 'Erreur';
+        closeBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+        closeBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+    }
+
     errorModal.classList.remove('hidden');
 }
 
