@@ -324,6 +324,12 @@ function loadFavorites() {
         }
     }
 
+    // Trier les favoris selon la sélection
+    if (favoritesSortSelect) {
+        const sortValue = favoritesSortSelect.value;
+        favorites = sortFavorites(favorites, sortValue);
+    }
+
     favoritesList.innerHTML = '';
 
     if (favorites.length === 0) {
@@ -411,6 +417,130 @@ function deleteFavorite(favoriteName) {
     } catch (e) {
         console.error('Erreur lors de la suppression du favori:', e);
     }
+}
+
+// Trier les favoris
+function sortFavorites(favorites, sortType) {
+    const sorted = [...favorites];
+
+    switch(sortType) {
+        case 'name-asc':
+            sorted.sort((a, b) => a.name.localeCompare(b.name));
+            break;
+        case 'name-desc':
+            sorted.sort((a, b) => b.name.localeCompare(a.name));
+            break;
+        case 'address-asc':
+            sorted.sort((a, b) => a.address.localeCompare(b.address));
+            break;
+        case 'address-desc':
+            sorted.sort((a, b) => b.address.localeCompare(a.address));
+            break;
+        case 'time-asc':
+            sorted.sort((a, b) => (a.time || 0) - (b.time || 0));
+            break;
+        case 'time-desc':
+            sorted.sort((a, b) => (b.time || 0) - (a.time || 0));
+            break;
+        default:
+            sorted.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return sorted;
+}
+
+// Filtrer les favoris
+function filterFavorites() {
+    const searchTerm = favoritesSearchInput.value.toLowerCase();
+    const favoriteCards = favoritesList.querySelectorAll('.favorite-card');
+
+    let visibleCount = 0;
+    favoriteCards.forEach(card => {
+        const name = card.querySelector('h4').textContent.toLowerCase();
+        const address = card.querySelector('p').textContent.toLowerCase();
+
+        if (name.includes(searchTerm) || address.includes(searchTerm)) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    // Afficher le message si aucun résultat
+    if (visibleCount === 0 && favoriteCards.length > 0) {
+        noFavoritesMessage.textContent = `Aucun favori trouvé pour "${favoritesSearchInput.value}"`;
+        noFavoritesMessage.classList.remove('hidden');
+    } else if (favoriteCards.length === 0) {
+        noFavoritesMessage.textContent = 'Aucun point favori enregistré. Ajoutez des points ci-dessous et cliquez sur "⭐ Sauvegarder comme favori"';
+        noFavoritesMessage.classList.remove('hidden');
+    } else {
+        noFavoritesMessage.classList.add('hidden');
+    }
+}
+
+// ==========================================
+// Export / Import des données
+// ==========================================
+
+function exportData() {
+    const data = {
+        favorites: JSON.parse(localStorage.getItem(FAVORITES_STORAGE) || '[]'),
+        points: JSON.parse(localStorage.getItem(POINTS_STORAGE) || '[]'),
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ronde-backup-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showError('Données exportées avec succès !');
+}
+
+function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+
+            // Valider les données
+            if (!data.favorites || !Array.isArray(data.favorites)) {
+                throw new Error('Format de fichier invalide');
+            }
+
+            // Demander confirmation
+            if (!confirm(`Voulez-vous vraiment importer ces données ?\n\n${data.favorites.length} favoris seront importés.\nCela écrasera vos données actuelles.`)) {
+                return;
+            }
+
+            // Importer les données
+            localStorage.setItem(FAVORITES_STORAGE, JSON.stringify(data.favorites));
+            if (data.points) {
+                localStorage.setItem(POINTS_STORAGE, JSON.stringify(data.points));
+            }
+
+            // Recharger l'affichage
+            loadFavorites();
+            showError('Données importées avec succès !');
+
+        } catch (error) {
+            showError(`Erreur lors de l'import: ${error.message}`);
+        }
+    };
+    reader.readAsText(file);
+
+    // Réinitialiser l'input pour permettre d'importer le même fichier à nouveau
+    event.target.value = '';
 }
 
 // ==========================================
@@ -898,64 +1028,191 @@ errorModal.addEventListener('click', (e) => {
 // Export et impression
 // ==========================================
 
-function printResults() {
-    window.print();
-}
+function generatePDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
 
-function exportToText() {
-    const steps = resultsContainer.querySelectorAll('.result-card');
-    let text = '═══════════════════════════════════════════\n';
-    text += '       ITINÉRAIRE DE RONDE OPTIMISÉ\n';
-    text += '═══════════════════════════════════════════\n\n';
+    // Couleurs
+    const primaryColor = [99, 102, 241]; // Indigo
+    const secondaryColor = [75, 85, 99]; // Gris foncé
+    const accentColor = [16, 185, 129]; // Vert
 
-    // Extraire les statistiques
+    // En-tête
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, 210, 40, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont(undefined, 'bold');
+    doc.text('ITINÉRAIRE DE RONDE OPTIMISÉ', 105, 15, { align: 'center' });
+
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Généré le ${new Date().toLocaleString('fr-FR')}`, 105, 25, { align: 'center' });
+
+    // Statistiques globales
     const stats = resultsContainer.querySelectorAll('.stat-card');
     if (stats.length >= 2) {
         const totalTime = stats[0].querySelector('.stat-value').textContent.trim();
         const totalDistance = stats[1].querySelector('.stat-value').textContent.trim();
-        text += `⏱️  Temps total: ${totalTime}\n`;
-        text += `🚗 Distance totale: ${totalDistance}\n`;
+
+        let y = 50;
+
+        // Carte Temps Total
+        doc.setFillColor(16, 185, 129);
+        doc.roundedRect(15, y, 85, 25, 3, 3, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(16);
+        doc.setFont(undefined, 'bold');
+        doc.text(totalTime, 57.5, y + 10, { align: 'center' });
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        doc.text('Temps total', 57.5, y + 18, { align: 'center' });
+
+        // Carte Distance Totale
+        doc.setFillColor(99, 102, 241);
+        doc.roundedRect(110, y, 85, 25, 3, 3, 'F');
+        doc.setFontSize(16);
+        doc.setFont(undefined, 'bold');
+        doc.text(totalDistance, 152.5, y + 10, { align: 'center' });
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        doc.text('Distance totale', 152.5, y + 18, { align: 'center' });
     }
 
-    text += '\n───────────────────────────────────────────\n';
-    text += 'ITINÉRAIRE DÉTAILLÉ\n';
-    text += '───────────────────────────────────────────\n\n';
+    // Résumé
+    const summary = resultsContainer.querySelector('.bg-blue-50');
+    if (summary) {
+        let y = 85;
+        doc.setFillColor(239, 246, 255);
+        doc.rect(15, y, 180, 30, 'F');
 
+        doc.setTextColor(...secondaryColor);
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('RÉSUMÉ', 20, y + 8);
+
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        const summaryTexts = summary.querySelectorAll('p');
+        summaryTexts.forEach((p, index) => {
+            doc.text(p.textContent.trim(), 20, y + 16 + (index * 6));
+        });
+    }
+
+    // Itinéraire détaillé
+    let y = 125;
+    doc.setTextColor(...primaryColor);
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('ITINÉRAIRE DÉTAILLÉ', 15, y);
+
+    y += 8;
+
+    const steps = resultsContainer.querySelectorAll('.result-card');
     steps.forEach((step, index) => {
+        // Vérifier si on doit ajouter une nouvelle page
+        if (y > 250) {
+            doc.addPage();
+            y = 20;
+        }
+
         const stepNumber = step.querySelector('.step-badge').textContent;
         const fromEl = step.querySelectorAll('.font-medium')[0];
         const toEl = step.querySelectorAll('.font-medium')[1];
         const from = fromEl ? fromEl.textContent : '';
         const to = toEl ? toEl.textContent : '';
 
-        const badges = step.querySelectorAll('.px-3');
-        const distance = badges[0] ? badges[0].textContent.trim() : '';
-        const time = badges[1] ? badges[1].textContent.trim() : '';
-        const onSite = badges[2] ? badges[2].textContent.trim() : '';
+        // Fond de l'étape
+        const isLastStep = index === steps.length - 1;
+        doc.setFillColor(isLastStep ? 220 : 243, isLastStep ? 252 : 244, isLastStep ? 231 : 246);
+        doc.roundedRect(15, y, 180, 30, 2, 2, 'F');
 
-        text += `Étape ${stepNumber}\n`;
-        text += `  De: ${from}\n`;
-        text += `  Vers: ${to}\n`;
-        text += `  ${distance}\n`;
-        text += `  ${time}\n`;
-        if (onSite) {
-            text += `  ${onSite}\n`;
-        }
-        text += '\n';
+        // Numéro d'étape
+        doc.setFillColor(...primaryColor);
+        doc.circle(22, y + 7, 4, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text(stepNumber, 22, y + 9, { align: 'center' });
+
+        // De / Vers
+        doc.setTextColor(...secondaryColor);
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'normal');
+        doc.text('De:', 30, y + 7);
+        doc.setFont(undefined, 'bold');
+        doc.text(from.substring(0, 60), 40, y + 7);
+
+        doc.setFont(undefined, 'normal');
+        doc.text('Vers:', 30, y + 14);
+        doc.setFont(undefined, 'bold');
+        doc.text(to.substring(0, 60), 40, y + 14);
+
+        // Informations (distance, temps, etc.)
+        const badges = step.querySelectorAll('.px-3');
+        let infoY = y + 22;
+        let infoX = 30;
+
+        badges.forEach((badge, badgeIndex) => {
+            const text = badge.textContent.trim();
+            if (text && badgeIndex < 4) {
+                doc.setFontSize(8);
+                doc.setFont(undefined, 'normal');
+
+                // Choisir la couleur selon le type d'info
+                if (text.includes('km')) {
+                    doc.setTextColor(37, 99, 235); // Bleu
+                } else if (text.includes('min')) {
+                    doc.setTextColor(147, 51, 234); // Violet
+                } else if (text.includes('sur place')) {
+                    doc.setTextColor(234, 88, 12); // Orange
+                } else {
+                    doc.setTextColor(22, 163, 74); // Vert
+                }
+
+                doc.text(text, infoX, infoY);
+                infoX += 45;
+            }
+        });
+
+        y += 35;
     });
 
-    text += '═══════════════════════════════════════════\n';
-    text += `Généré le ${new Date().toLocaleString('fr-FR')}\n`;
-    text += '═══════════════════════════════════════════\n';
+    // Pied de page sur chaque page
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFillColor(...primaryColor);
+        doc.rect(0, 287, 210, 10, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'normal');
+        doc.text(`Page ${i} / ${pageCount}`, 105, 293, { align: 'center' });
+        doc.text('Gestionnaire de Rondes', 15, 293);
+    }
 
-    // Télécharger le fichier
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ronde-${Date.now()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    return doc;
+}
+
+function printResults() {
+    const doc = generatePDF();
+
+    // Ouvrir le PDF dans un nouvel onglet pour impression
+    const pdfBlob = doc.output('blob');
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    const printWindow = window.open(pdfUrl);
+
+    if (printWindow) {
+        printWindow.addEventListener('load', () => {
+            printWindow.print();
+        });
+    }
+}
+
+function exportToText() {
+    const doc = generatePDF();
+
+    // Télécharger le PDF
+    doc.save(`ronde-${new Date().toISOString().split('T')[0]}.pdf`);
 }

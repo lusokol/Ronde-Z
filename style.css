@@ -307,24 +307,139 @@ input[type="number"]::-webkit-outer-spin-button {
 
 /* Print styles */
 @media print {
-    .no-print {
-        display: none;
+    /* Masquer les éléments non nécessaires */
+    .no-print,
+    header,
+    .bg-yellow-50,
+    .bg-white:has(#rondeForm),
+    .favorite-card,
+    #favoritesContainer,
+    button,
+    .delete-point,
+    .save-favorite {
+        display: none !important;
     }
 
+    /* Réinitialiser le fond */
     body {
-        background: white;
+        background: white !important;
+        color: black !important;
     }
 
+    /* Container pleine largeur */
+    .container {
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    /* Résultats en pleine page */
+    #resultsContainer {
+        page-break-inside: avoid;
+    }
+
+    /* Cartes de stats */
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color: white !important;
+        page-break-inside: avoid;
+    }
+
+    /* Cartes de résultats */
     .result-card {
         box-shadow: none;
-        border: 1px solid #ddd;
+        border: 2px solid #6366f1 !important;
+        page-break-inside: avoid;
+        margin-bottom: 15px !important;
+        background: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 
-    .favorite-card {
-        display: none;
+    /* Badge d'étape */
+    .step-badge {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 
-    #favoritesContainer {
-        display: none;
+    /* Résumé */
+    .bg-blue-50 {
+        background: #eff6ff !important;
+        border: 1px solid #3b82f6 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Badges d'informations */
+    .bg-blue-100 {
+        background-color: #dbeafe !important;
+        color: #1e40af !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .bg-purple-100 {
+        background-color: #f3e8ff !important;
+        color: #6b21a8 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .bg-orange-100 {
+        background-color: #ffedd5 !important;
+        color: #9a3412 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .bg-green-100 {
+        background-color: #d1fae5 !important;
+        color: #065f46 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .bg-red-100 {
+        background-color: #fee2e2 !important;
+        color: #991b1b !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .bg-gray-100 {
+        background-color: #f3f4f6 !important;
+        color: #374151 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Bordures colorées */
+    .border-green-500 {
+        border-color: #10b981 !important;
+    }
+
+    .border-indigo-500 {
+        border-color: #6366f1 !important;
+    }
+
+    /* Ajout d'un en-tête d'impression */
+    @page {
+        margin: 2cm;
+    }
+
+    /* Titre pour l'impression */
+    #resultsContainer::before {
+        content: "ITINÉRAIRE DE RONDE OPTIMISÉ";
+        display: block;
+        font-size: 24px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 20px;
+        color: #4f46e5;
+        padding: 15px;
+        border-bottom: 3px solid #4f46e5;
     }
 }
