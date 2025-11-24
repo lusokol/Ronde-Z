@@ -12,9 +12,10 @@ let pointsCounter = 0;
 
 // Variables pour la carte
 let addressMap = null;
-let addressMarker = null;
+let addressMarkers = []; // Array de marqueurs pour les résultats multiples
 let geocodeTimeout = null;
 let currentGeocodedData = null;
+let geocodeResults = []; // Stocker tous les résultats du géocodage
 
 // Éléments DOM
 const apiKeyInput = document.getElementById('apiKey');
@@ -952,7 +953,7 @@ function initializeMap() {
     if (addressMap) {
         addressMap.remove();
         addressMap = null;
-        addressMarker = null;
+        addressMarkers = [];
     }
 
     // Créer une nouvelle carte centrée sur la France
@@ -1011,7 +1012,7 @@ async function geocodeAddressForMap(address) {
 
     try {
         const response = await fetch(
-            `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${encodeURIComponent(address)}`,
+            `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${encodeURIComponent(address)}&size=10`,
             {
                 headers: {
                     'Accept': 'application/json'
@@ -1026,38 +1027,144 @@ async function geocodeAddressForMap(address) {
         const data = await response.json();
 
         if (data.features && data.features.length > 0) {
-            const [lon, lat] = data.features[0].geometry.coordinates;
-            const foundAddress = data.features[0].properties.label;
+            // Stocker tous les résultats
+            geocodeResults = data.features.map((feature, index) => ({
+                lon: feature.geometry.coordinates[0],
+                lat: feature.geometry.coordinates[1],
+                address: feature.properties.label,
+                accuracy: feature.properties.accuracy || 'unknown',
+                name: feature.properties.name || '',
+                index: index
+            }));
 
-            // Sauvegarder les données géocodées
-            currentGeocodedData = { lon, lat, address: foundAddress };
+            // Sélectionner automatiquement le premier résultat le plus précis
+            // Prioriser les résultats avec une adresse complète (contenant un numéro)
+            const bestResult = geocodeResults.find(r => /^\d+/.test(r.address)) || geocodeResults[0];
+            const bestIndex = geocodeResults.indexOf(bestResult);
 
-            // Mettre à jour la carte
-            if (addressMap) {
-                // Supprimer le marqueur précédent
-                if (addressMarker) {
-                    addressMap.removeLayer(addressMarker);
-                }
+            // Sauvegarder les données du meilleur résultat
+            currentGeocodedData = bestResult;
 
-                // Ajouter un nouveau marqueur
-                addressMarker = L.marker([lat, lon]).addTo(addressMap);
-                addressMarker.bindPopup(`<b>${foundAddress}</b>`).openPopup();
-
-                // Centrer la carte sur le marqueur
-                addressMap.setView([lat, lon], 15);
-            }
+            // Mettre à jour la carte avec tous les résultats
+            displayMultipleResults(geocodeResults, bestIndex);
 
             // Afficher le statut de succès
-            document.getElementById('geocodeStatus').innerHTML = `<span class="text-green-600">✓ Adresse trouvée : ${foundAddress}</span>`;
+            if (geocodeResults.length > 1) {
+                document.getElementById('geocodeStatus').innerHTML = `<span class="text-green-600">✓ ${geocodeResults.length} résultats trouvés</span>`;
+            } else {
+                document.getElementById('geocodeStatus').innerHTML = `<span class="text-green-600">✓ Adresse trouvée</span>`;
+            }
         } else {
             document.getElementById('geocodeStatus').innerHTML = '<span class="text-orange-500">⚠️ Adresse non trouvée</span>';
             currentGeocodedData = null;
+            geocodeResults = [];
+            document.getElementById('geocodeResults').classList.add('hidden');
         }
     } catch (error) {
         console.error('Erreur de géocodage:', error);
         document.getElementById('geocodeStatus').innerHTML = '<span class="text-red-500">⚠️ Erreur de géocodage</span>';
         currentGeocodedData = null;
+        geocodeResults = [];
+        document.getElementById('geocodeResults').classList.add('hidden');
     }
+}
+
+function displayMultipleResults(results, selectedIndex = 0) {
+    if (!addressMap) return;
+
+    // Supprimer tous les marqueurs précédents
+    addressMarkers.forEach(marker => addressMap.removeLayer(marker));
+    addressMarkers = [];
+
+    // Créer les icônes personnalisées pour les marqueurs
+    const bounds = [];
+
+    // Afficher la liste des résultats
+    const resultsList = document.getElementById('geocodeResultsList');
+    const resultsContainer = document.getElementById('geocodeResults');
+    resultsList.innerHTML = '';
+
+    results.forEach((result, index) => {
+        const isSelected = index === selectedIndex;
+
+        // Créer un marqueur numéroté
+        const markerIcon = L.divIcon({
+            className: 'custom-marker',
+            html: `<div class="relative">
+                <div class="w-8 h-8 rounded-full ${isSelected ? 'bg-indigo-600' : 'bg-gray-500'} text-white flex items-center justify-center font-bold text-sm shadow-lg border-2 border-white">
+                    ${index + 1}
+                </div>
+            </div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+        });
+
+        const marker = L.marker([result.lat, result.lon], { icon: markerIcon })
+            .addTo(addressMap)
+            .bindPopup(`<b>${index + 1}. ${result.address}</b>`);
+
+        // Ajouter un événement click sur le marqueur
+        marker.on('click', () => selectGeocodeResult(index));
+
+        addressMarkers.push(marker);
+        bounds.push([result.lat, result.lon]);
+
+        // Ajouter à la liste
+        const resultItem = document.createElement('div');
+        resultItem.className = `p-2 rounded cursor-pointer transition-colors ${
+            isSelected
+                ? 'bg-indigo-100 border-2 border-indigo-600'
+                : 'bg-gray-100 hover:bg-gray-200 border-2 border-transparent'
+        }`;
+        resultItem.innerHTML = `
+            <div class="flex items-start gap-2">
+                <span class="font-bold text-indigo-600">${index + 1}.</span>
+                <div class="flex-1 text-sm">
+                    <div class="font-medium">${result.address}</div>
+                    ${result.name && result.name !== result.address ? `<div class="text-xs text-gray-600">${result.name}</div>` : ''}
+                </div>
+            </div>
+        `;
+        resultItem.onclick = () => selectGeocodeResult(index);
+        resultsList.appendChild(resultItem);
+    });
+
+    // Afficher la liste des résultats si plus d'un
+    if (results.length > 1) {
+        resultsContainer.classList.remove('hidden');
+    } else {
+        resultsContainer.classList.add('hidden');
+    }
+
+    // Centrer la carte sur tous les résultats
+    if (bounds.length > 0) {
+        if (bounds.length === 1) {
+            addressMap.setView(bounds[0], 17);
+        } else {
+            addressMap.fitBounds(bounds, { padding: [50, 50] });
+        }
+    }
+
+    // Ouvrir le popup du résultat sélectionné
+    if (addressMarkers[selectedIndex]) {
+        addressMarkers[selectedIndex].openPopup();
+    }
+}
+
+function selectGeocodeResult(index) {
+    if (index < 0 || index >= geocodeResults.length) return;
+
+    // Mettre à jour les données sélectionnées
+    currentGeocodedData = geocodeResults[index];
+
+    // Mettre à jour l'adresse dans le champ input
+    document.getElementById('modalAddress').value = currentGeocodedData.address;
+
+    // Re-afficher les résultats avec la nouvelle sélection
+    displayMultipleResults(geocodeResults, index);
+
+    // Mettre à jour le statut
+    document.getElementById('geocodeStatus').innerHTML = `<span class="text-green-600">✓ Résultat ${index + 1} sélectionné</span>`;
 }
 
 function closeAddressModal() {
@@ -1068,13 +1175,18 @@ function closeAddressModal() {
     if (addressMap) {
         addressMap.remove();
         addressMap = null;
-        addressMarker = null;
+        addressMarkers = [];
     }
 
     // Annuler le timeout de géocodage
     if (geocodeTimeout) {
         clearTimeout(geocodeTimeout);
     }
+
+    // Nettoyer les résultats
+    geocodeResults = [];
+    currentGeocodedData = null;
+    document.getElementById('geocodeResults').classList.add('hidden');
 }
 
 function confirmAddressModal(mode) {
