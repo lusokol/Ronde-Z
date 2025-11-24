@@ -7,6 +7,10 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
     <div class="container mx-auto px-4 py-8 max-w-6xl">
@@ -182,6 +186,94 @@
             <button id="closeError" class="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
                 Fermer
             </button>
+        </div>
+    </div>
+
+    <!-- Modal pour ajouter une adresse avec carte -->
+    <div id="addressModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-900">📍 Ajouter une adresse</h3>
+                <button id="closeAddressModal" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">
+                    ✕
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Formulaire à gauche -->
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Nom du point (optionnel)</label>
+                        <input type="text" id="modalPointName"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                               placeholder="Ex: Bureau client A">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Adresse *</label>
+                        <input type="text" id="modalAddress"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                               placeholder="Ex: 456 Avenue des Champs, Lyon"
+                               required>
+                        <p class="text-xs text-gray-500 mt-1">Tapez une adresse pour la voir sur la carte</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Temps sur place</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="modalTimeHours"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500"
+                                       min="0" max="23" value="0" placeholder="0">
+                                <span class="text-xs text-gray-500">h</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="modalTimeMinutes"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500"
+                                       min="0" max="59" value="10" placeholder="0">
+                                <span class="text-xs text-gray-500">min</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Contrainte horaire</label>
+                        <select id="modalTimeConstraint" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500">
+                            <option value="none">Aucune</option>
+                            <option value="before">Avant</option>
+                            <option value="at">À</option>
+                            <option value="after">Après</option>
+                        </select>
+                    </div>
+
+                    <div id="modalConstraintTimeContainer" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Heure de la contrainte</label>
+                        <input type="time" id="modalConstraintTime"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500"
+                               value="09:00">
+                    </div>
+
+                    <div id="geocodeStatus" class="text-sm">
+                        <span class="text-gray-500">En attente de l'adresse...</span>
+                    </div>
+                </div>
+
+                <!-- Carte à droite -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Carte de visualisation</label>
+                    <div id="addressMap" class="w-full h-96 border border-gray-300 rounded-lg"></div>
+                </div>
+            </div>
+
+            <!-- Boutons -->
+            <div class="flex gap-3 mt-6">
+                <button id="cancelAddressModal" class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                    Annuler
+                </button>
+                <button id="confirmAddressModal" class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                    Confirmer
+                </button>
+            </div>
         </div>
     </div>
 

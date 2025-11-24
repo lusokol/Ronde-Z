@@ -10,6 +10,12 @@ const COLS_STORAGE = 'cols_data';
 const SECTEURS_STORAGE = 'secteurs_data';
 let pointsCounter = 0;
 
+// Variables pour la carte
+let addressMap = null;
+let addressMarker = null;
+let geocodeTimeout = null;
+let currentGeocodedData = null;
+
 // Éléments DOM
 const apiKeyInput = document.getElementById('apiKey');
 const startPointInput = document.getElementById('startPoint');
@@ -52,12 +58,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Charger les points sauvegardés
     loadSavedPoints();
-
-    // Ajouter un point par défaut si la liste est vide
-    if (pointsList.children.length === 0) {
-        addPoint();
-        addPoint();
-    }
 
     // Événements
     addPointBtn.addEventListener('click', addPoint);
@@ -122,7 +122,12 @@ async function loadInitialData() {
 // Gestion du formulaire et des points
 // ==========================================
 
-function addPoint(pointData = null) {
+function addPoint() {
+    // Ouvrir le modal pour ajouter un point
+    openAddressModal('add');
+}
+
+function addPointToList(pointData = null) {
     pointsCounter++;
     const pointDiv = document.createElement('div');
     pointDiv.className = 'point-item border border-gray-200 rounded-lg p-4 bg-gray-50';
@@ -133,7 +138,10 @@ function addPoint(pointData = null) {
     let timeHours = 0;
     let timeMinutes = 10;
 
-    if (pointData?.time !== undefined) {
+    if (pointData?.timeHours !== undefined && pointData?.timeMinutes !== undefined) {
+        timeHours = pointData.timeHours;
+        timeMinutes = pointData.timeMinutes;
+    } else if (pointData?.time !== undefined) {
         const totalMinutes = parseInt(pointData.time);
         timeHours = Math.floor(totalMinutes / 60);
         timeMinutes = totalMinutes % 60;
@@ -207,7 +215,7 @@ function addPoint(pointData = null) {
                 <div class="flex gap-2">
                     <button type="button"
                             class="save-favorite flex-1 px-3 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors text-xs font-medium"
-                            onclick="saveFavorite(this)">
+                            onclick="saveFavoriteFromPoint(this)">
                         ⭐ Sauvegarder comme favori
                     </button>
                 </div>
@@ -290,7 +298,7 @@ function loadSavedPoints() {
         try {
             const points = JSON.parse(savedPoints);
             points.forEach(point => {
-                addPoint(point);
+                addPointToList(point);
             });
         } catch (e) {
             console.error('Erreur lors du chargement des points:', e);
@@ -425,7 +433,7 @@ function getFavoritesBySecteurId(secteurId) {
 // Gestion des points favoris
 // ==========================================
 
-function saveFavorite(button) {
+function saveFavoriteFromPoint(button) {
     const pointDiv = button.closest('.point-item');
     const name = pointDiv.querySelector('.point-name').value.trim();
     const address = pointDiv.querySelector('.point-address').value.trim();
@@ -776,7 +784,7 @@ function useFavorite(favoriteName) {
     const favorites = getFavorites();
     const favorite = favorites.find(fav => fav.name === favoriteName);
     if (favorite) {
-        addPoint(favorite);
+        addPointToList(favorite);
     }
 }
 
@@ -784,7 +792,7 @@ function useFavoriteById(favoriteId) {
     const favorites = getFavorites();
     const favorite = favorites.find(fav => fav.id === favoriteId);
     if (favorite) {
-        addPoint(favorite);
+        addPointToList(favorite);
     }
 }
 
@@ -861,6 +869,259 @@ function toggleSecteur(secteurId) {
         secteurContainer.classList.add('hidden');
         secteurIcon.textContent = '▶';
     }
+}
+
+// ==========================================
+// Gestion du modal d'ajout d'adresse avec carte
+// ==========================================
+
+function openAddressModal(mode = 'add', pointData = null) {
+    const modal = document.getElementById('addressModal');
+    const modalAddress = document.getElementById('modalAddress');
+    const modalPointName = document.getElementById('modalPointName');
+    const modalTimeHours = document.getElementById('modalTimeHours');
+    const modalTimeMinutes = document.getElementById('modalTimeMinutes');
+    const modalTimeConstraint = document.getElementById('modalTimeConstraint');
+    const modalConstraintTime = document.getElementById('modalConstraintTime');
+    const modalConstraintTimeContainer = document.getElementById('modalConstraintTimeContainer');
+    const geocodeStatus = document.getElementById('geocodeStatus');
+
+    // Réinitialiser le formulaire
+    if (pointData) {
+        modalPointName.value = pointData.name || '';
+        modalAddress.value = pointData.address || '';
+        modalTimeHours.value = pointData.timeHours || 0;
+        modalTimeMinutes.value = pointData.timeMinutes || 10;
+        modalTimeConstraint.value = pointData.timeConstraint || 'none';
+        modalConstraintTime.value = pointData.constraintTime || '09:00';
+    } else {
+        modalPointName.value = '';
+        modalAddress.value = '';
+        modalTimeHours.value = 0;
+        modalTimeMinutes.value = 10;
+        modalTimeConstraint.value = 'none';
+        modalConstraintTime.value = '09:00';
+    }
+
+    // Afficher/masquer le champ de contrainte horaire
+    if (modalTimeConstraint.value === 'none') {
+        modalConstraintTimeContainer.classList.add('hidden');
+    } else {
+        modalConstraintTimeContainer.classList.remove('hidden');
+    }
+
+    // Réinitialiser le statut de géocodage
+    geocodeStatus.innerHTML = '<span class="text-gray-500">En attente de l\'adresse...</span>';
+    currentGeocodedData = null;
+
+    // Afficher le modal
+    modal.classList.remove('hidden');
+
+    // Initialiser la carte
+    setTimeout(() => {
+        initializeMap();
+        // Si on a déjà une adresse, la géocoder
+        if (modalAddress.value.trim()) {
+            geocodeAddressForMap(modalAddress.value.trim());
+        }
+    }, 100);
+
+    // Événements
+    modalAddress.removeEventListener('input', handleAddressInput);
+    modalAddress.addEventListener('input', handleAddressInput);
+
+    modalTimeConstraint.removeEventListener('change', handleConstraintChange);
+    modalTimeConstraint.addEventListener('change', handleConstraintChange);
+
+    const closeBtn = document.getElementById('closeAddressModal');
+    const cancelBtn = document.getElementById('cancelAddressModal');
+    const confirmBtn = document.getElementById('confirmAddressModal');
+
+    closeBtn.onclick = closeAddressModal;
+    cancelBtn.onclick = closeAddressModal;
+    confirmBtn.onclick = () => confirmAddressModal(mode);
+
+    // Stocker le mode pour plus tard
+    modal.dataset.mode = mode;
+}
+
+function initializeMap() {
+    const mapContainer = document.getElementById('addressMap');
+
+    // Détruire la carte existante si elle existe
+    if (addressMap) {
+        addressMap.remove();
+        addressMap = null;
+        addressMarker = null;
+    }
+
+    // Créer une nouvelle carte centrée sur la France
+    addressMap = L.map('addressMap').setView([46.603354, 1.888334], 6);
+
+    // Ajouter le layer de tuiles OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(addressMap);
+
+    // Forcer un refresh de la carte
+    setTimeout(() => {
+        addressMap.invalidateSize();
+    }, 100);
+}
+
+function handleAddressInput(e) {
+    const address = e.target.value.trim();
+
+    // Annuler le timeout précédent
+    if (geocodeTimeout) {
+        clearTimeout(geocodeTimeout);
+    }
+
+    if (address.length < 3) {
+        document.getElementById('geocodeStatus').innerHTML = '<span class="text-gray-500">Tapez au moins 3 caractères...</span>';
+        currentGeocodedData = null;
+        return;
+    }
+
+    // Afficher un message de chargement
+    document.getElementById('geocodeStatus').innerHTML = '<span class="text-blue-500">🔍 Recherche en cours...</span>';
+
+    // Attendre 800ms avant de géocoder (debounce)
+    geocodeTimeout = setTimeout(() => {
+        geocodeAddressForMap(address);
+    }, 800);
+}
+
+function handleConstraintChange(e) {
+    const modalConstraintTimeContainer = document.getElementById('modalConstraintTimeContainer');
+    if (e.target.value === 'none') {
+        modalConstraintTimeContainer.classList.add('hidden');
+    } else {
+        modalConstraintTimeContainer.classList.remove('hidden');
+    }
+}
+
+async function geocodeAddressForMap(address) {
+    const apiKey = apiKeyInput.value.trim();
+    if (!apiKey) {
+        document.getElementById('geocodeStatus').innerHTML = '<span class="text-red-500">⚠️ Clé API manquante</span>';
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${encodeURIComponent(address)}`,
+            {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error('Erreur de géocodage');
+        }
+
+        const data = await response.json();
+
+        if (data.features && data.features.length > 0) {
+            const [lon, lat] = data.features[0].geometry.coordinates;
+            const foundAddress = data.features[0].properties.label;
+
+            // Sauvegarder les données géocodées
+            currentGeocodedData = { lon, lat, address: foundAddress };
+
+            // Mettre à jour la carte
+            if (addressMap) {
+                // Supprimer le marqueur précédent
+                if (addressMarker) {
+                    addressMap.removeLayer(addressMarker);
+                }
+
+                // Ajouter un nouveau marqueur
+                addressMarker = L.marker([lat, lon]).addTo(addressMap);
+                addressMarker.bindPopup(`<b>${foundAddress}</b>`).openPopup();
+
+                // Centrer la carte sur le marqueur
+                addressMap.setView([lat, lon], 15);
+            }
+
+            // Afficher le statut de succès
+            document.getElementById('geocodeStatus').innerHTML = `<span class="text-green-600">✓ Adresse trouvée : ${foundAddress}</span>`;
+        } else {
+            document.getElementById('geocodeStatus').innerHTML = '<span class="text-orange-500">⚠️ Adresse non trouvée</span>';
+            currentGeocodedData = null;
+        }
+    } catch (error) {
+        console.error('Erreur de géocodage:', error);
+        document.getElementById('geocodeStatus').innerHTML = '<span class="text-red-500">⚠️ Erreur de géocodage</span>';
+        currentGeocodedData = null;
+    }
+}
+
+function closeAddressModal() {
+    const modal = document.getElementById('addressModal');
+    modal.classList.add('hidden');
+
+    // Détruire la carte
+    if (addressMap) {
+        addressMap.remove();
+        addressMap = null;
+        addressMarker = null;
+    }
+
+    // Annuler le timeout de géocodage
+    if (geocodeTimeout) {
+        clearTimeout(geocodeTimeout);
+    }
+}
+
+function confirmAddressModal(mode) {
+    const modalAddress = document.getElementById('modalAddress');
+    const modalPointName = document.getElementById('modalPointName');
+    const modalTimeHours = document.getElementById('modalTimeHours');
+    const modalTimeMinutes = document.getElementById('modalTimeMinutes');
+    const modalTimeConstraint = document.getElementById('modalTimeConstraint');
+    const modalConstraintTime = document.getElementById('modalConstraintTime');
+
+    const address = modalAddress.value.trim();
+
+    if (!address) {
+        showError('Veuillez entrer une adresse.');
+        return;
+    }
+
+    // Préparer les données du point
+    const pointData = {
+        name: modalPointName.value.trim(),
+        address: address,
+        timeHours: parseInt(modalTimeHours.value) || 0,
+        timeMinutes: parseInt(modalTimeMinutes.value) || 10,
+        time: (parseInt(modalTimeHours.value) || 0) * 60 + (parseInt(modalTimeMinutes.value) || 10),
+        timeConstraint: modalTimeConstraint.value,
+        constraintTime: modalConstraintTime.value
+    };
+
+    if (mode === 'add') {
+        // Ajouter le point à la liste
+        addPointToList(pointData);
+        showError('Point ajouté avec succès !', 'success');
+    } else if (mode === 'favorite') {
+        // Ouvrir le modal de sélection du secteur pour sauvegarder comme favori
+        closeAddressModal();
+        showSecteurSelectionModal(
+            pointData.name,
+            pointData.address,
+            pointData.time,
+            pointData.timeConstraint,
+            pointData.constraintTime
+        );
+        return;
+    }
+
+    // Fermer le modal
+    closeAddressModal();
 }
 
 // Trier les favoris
