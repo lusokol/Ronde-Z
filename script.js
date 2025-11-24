@@ -1044,6 +1044,9 @@ async function handleFormSubmit(e) {
         return;
     }
 
+    // Récupérer le mode d'optimisation
+    const optimizationMode = document.getElementById('optimizationMode').value;
+
     // Afficher le chargement
     showLoading();
 
@@ -1056,7 +1059,7 @@ async function handleFormSubmit(e) {
         const distanceMatrix = await getDistanceMatrix(coordinates, apiKey);
 
         // Optimiser la route (TSP) avec contraintes horaires
-        const optimizedRoute = optimizeTSP(distanceMatrix, points.length, points);
+        const optimizedRoute = optimizeTSP(distanceMatrix, points.length, points, optimizationMode);
 
         // Calculer les détails de la route
         const routeDetails = calculateRouteDetails(
@@ -1156,13 +1159,19 @@ async function getDistanceMatrix(coordinates, apiKey) {
 // Algorithme d'optimisation TSP avec contraintes horaires
 // ==========================================
 
-function optimizeTSP(matrix, numPoints, points) {
+function optimizeTSP(matrix, numPoints, points, optimizationMode = 'time') {
     // Algorithme du plus proche voisin modifié avec contraintes horaires
     // Point 0 = départ/arrivée
     // Points 1 à numPoints = points à visiter
 
     const distances = matrix.distances;
     const durations = matrix.durations; // en secondes
+
+    // Choisir la métrique selon le mode d'optimisation
+    // Pour le temps: utiliser durations (secondes)
+    // Pour la distance: utiliser distances (km)
+    const metric = (optimizationMode === 'time') ? durations : distances;
+
     const visited = new Set([0]); // Commence au point de départ
     const route = [0];
     let current = 0;
@@ -1208,8 +1217,8 @@ function optimizeTSP(matrix, numPoints, points) {
                 }
             }
 
-            // Score = distance + pénalité contrainte
-            const score = distances[current][i] + constraintPenalty;
+            // Score = métrique choisie (temps ou distance) + pénalité contrainte
+            const score = metric[current][i] + constraintPenalty;
 
             if (score < bestScore) {
                 bestScore = score;
@@ -1237,7 +1246,55 @@ function optimizeTSP(matrix, numPoints, points) {
     // Retour au point de départ
     route.push(0);
 
-    return route;
+    // Appliquer l'optimisation 2-opt pour améliorer la route
+    const improvedRoute = improve2opt(route, metric);
+
+    return improvedRoute;
+}
+
+// ==========================================
+// Algorithme 2-opt pour amélioration locale
+// ==========================================
+
+function improve2opt(route, metric) {
+    // L'algorithme 2-opt améliore la route en inversant des segments
+    // jusqu'à ce qu'aucune amélioration ne soit possible
+
+    let improved = true;
+    let bestRoute = [...route];
+
+    while (improved) {
+        improved = false;
+
+        // Essayer toutes les paires de segments possibles
+        for (let i = 1; i < bestRoute.length - 2; i++) {
+            for (let j = i + 1; j < bestRoute.length - 1; j++) {
+                // Calculer la distance actuelle
+                const currentDist =
+                    metric[bestRoute[i - 1]][bestRoute[i]] +
+                    metric[bestRoute[j]][bestRoute[j + 1]];
+
+                // Calculer la distance après inversion
+                const newDist =
+                    metric[bestRoute[i - 1]][bestRoute[j]] +
+                    metric[bestRoute[i]][bestRoute[j + 1]];
+
+                // Si l'inversion améliore la route
+                if (newDist < currentDist) {
+                    // Inverser le segment entre i et j
+                    const newRoute = [
+                        ...bestRoute.slice(0, i),
+                        ...bestRoute.slice(i, j + 1).reverse(),
+                        ...bestRoute.slice(j + 1)
+                    ];
+                    bestRoute = newRoute;
+                    improved = true;
+                }
+            }
+        }
+    }
+
+    return bestRoute;
 }
 
 // ==========================================
