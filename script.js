@@ -154,6 +154,7 @@ function addPointToList(pointData = null) {
     const name = pointData?.name || '';
     const timeConstraint = pointData?.timeConstraint || 'none';
     const constraintTime = pointData?.constraintTime || '09:00';
+    const comment = pointData?.comment || '';
 
     pointDiv.innerHTML = `
         <div class="flex items-start gap-3">
@@ -175,6 +176,13 @@ function addPointToList(pointData = null) {
                            placeholder="Ex: 456 Avenue des Champs, Lyon"
                            value="${address}"
                            required>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Commentaire (optionnel)</label>
+                    <textarea
+                           class="point-comment w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                           placeholder="Ex: Sonner 2 fois, code porte 1234"
+                           rows="2">${comment}</textarea>
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">Temps sur place</label>
@@ -248,10 +256,6 @@ function toggleTimeInput(selectElement) {
 }
 
 function removePoint(button) {
-    if (pointsList.children.length <= 1) {
-        showError('Vous devez avoir au moins un point à visiter.');
-        return;
-    }
     button.closest('.point-item').remove();
     renumberPoints();
     savePoints();
@@ -285,11 +289,12 @@ function savePoints() {
         const timeMinutes = parseInt(pointEl.querySelector('.point-time-minutes')?.value || 0);
         const time = timeHours * 60 + timeMinutes;
         const name = pointEl.querySelector('.point-name').value;
+        const comment = pointEl.querySelector('.point-comment')?.value || '';
         const timeConstraint = pointEl.querySelector('.time-constraint').value;
         const constraintTime = pointEl.querySelector('.constraint-time').value;
 
         if (address) {
-            points.push({ address, time, name, timeConstraint, constraintTime });
+            points.push({ address, time, name, comment, timeConstraint, constraintTime });
         }
     });
 
@@ -908,6 +913,7 @@ function openAddressModal(mode = 'add', pointData = null) {
     const modal = document.getElementById('addressModal');
     const modalAddress = document.getElementById('modalAddress');
     const modalPointName = document.getElementById('modalPointName');
+    const modalComment = document.getElementById('modalComment');
     const modalTimeHours = document.getElementById('modalTimeHours');
     const modalTimeMinutes = document.getElementById('modalTimeMinutes');
     const modalTimeConstraint = document.getElementById('modalTimeConstraint');
@@ -921,6 +927,7 @@ function openAddressModal(mode = 'add', pointData = null) {
         modalTitle.textContent = '🏁 Sélectionner le point de départ';
         // Cacher les champs non nécessaires pour le point de départ
         modalPointName.closest('div').classList.add('hidden');
+        modalComment.closest('div').classList.add('hidden');
         modalTimeHours.closest('div').closest('div').classList.add('hidden');
         modalTimeConstraint.closest('div').classList.add('hidden');
         modalConstraintTimeContainer.classList.add('hidden');
@@ -928,6 +935,7 @@ function openAddressModal(mode = 'add', pointData = null) {
         modalTitle.textContent = '🏁 Sélectionner le point d\'arrivée';
         // Cacher les champs non nécessaires pour le point d'arrivée
         modalPointName.closest('div').classList.add('hidden');
+        modalComment.closest('div').classList.add('hidden');
         modalTimeHours.closest('div').closest('div').classList.add('hidden');
         modalTimeConstraint.closest('div').classList.add('hidden');
         modalConstraintTimeContainer.classList.add('hidden');
@@ -935,6 +943,7 @@ function openAddressModal(mode = 'add', pointData = null) {
         modalTitle.textContent = '📍 Ajouter une adresse';
         // Afficher tous les champs pour les autres modes
         modalPointName.closest('div').classList.remove('hidden');
+        modalComment.closest('div').classList.remove('hidden');
         modalTimeHours.closest('div').closest('div').classList.remove('hidden');
         modalTimeConstraint.closest('div').classList.remove('hidden');
     }
@@ -943,6 +952,7 @@ function openAddressModal(mode = 'add', pointData = null) {
     if (pointData) {
         modalPointName.value = pointData.name || '';
         modalAddress.value = pointData.address || '';
+        modalComment.value = pointData.comment || '';
         modalTimeHours.value = pointData.timeHours || 0;
         modalTimeMinutes.value = pointData.timeMinutes || 10;
         modalTimeConstraint.value = pointData.timeConstraint || 'none';
@@ -950,6 +960,7 @@ function openAddressModal(mode = 'add', pointData = null) {
     } else {
         modalPointName.value = '';
         modalAddress.value = '';
+        modalComment.value = '';
         modalTimeHours.value = 0;
         modalTimeMinutes.value = 10;
         modalTimeConstraint.value = 'none';
@@ -1278,6 +1289,7 @@ function confirmAddressModal(mode) {
     const pointData = {
         name: modalPointName.value.trim(),
         address: address,
+        comment: document.getElementById('modalComment').value.trim(),
         timeHours: parseInt(modalTimeHours.value) || 0,
         timeMinutes: parseInt(modalTimeMinutes.value) || 10,
         time: (parseInt(modalTimeHours.value) || 0) * 60 + (parseInt(modalTimeMinutes.value) || 10),
@@ -1475,6 +1487,8 @@ async function handleFormSubmit(e) {
 
     pointElements.forEach(pointEl => {
         const address = pointEl.querySelector('.point-address').value.trim();
+        const name = pointEl.querySelector('.point-name').value.trim();
+        const comment = pointEl.querySelector('.point-comment')?.value.trim() || '';
         const timeHours = parseInt(pointEl.querySelector('.point-time-hours')?.value || 0);
         const timeMinutes = parseInt(pointEl.querySelector('.point-time-minutes')?.value || 0);
         const time = timeHours * 60 + timeMinutes; // Convertir en minutes
@@ -1484,6 +1498,8 @@ async function handleFormSubmit(e) {
         if (address) {
             points.push({
                 address,
+                name,
+                comment,
                 timeOnSite: time,
                 timeConstraint,
                 constraintTime
@@ -1963,6 +1979,12 @@ function displayResults(routeDetails) {
                             ` : ''}
                             ${constraintHTML}
                         </div>
+                        ${step.pointData && step.pointData.comment ? `
+                            <div class="mt-2 text-sm bg-yellow-50 border-l-2 border-yellow-400 p-2 rounded">
+                                <span class="font-medium text-yellow-800">💬 Commentaire :</span>
+                                <span class="text-yellow-700 ml-1">${step.pointData.comment}</span>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>
