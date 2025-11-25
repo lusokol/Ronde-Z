@@ -96,7 +96,7 @@
                     <!-- Point de départ/arrivée -->
                     <div>
                         <label for="startPoint" class="block text-sm font-medium text-gray-700 mb-2">
-                            🏁 Point de départ / arrivée
+                            🏁 Point de départ
                         </label>
                         <div class="flex gap-2">
                             <input type="text" id="startPoint" required
@@ -110,6 +110,35 @@
                             </button>
                         </div>
                         <p class="text-xs text-gray-500 mt-1">Cliquez sur "Carte" pour sélectionner avec visualisation</p>
+                    </div>
+
+                    <!-- Checkbox même point d'arrivée -->
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="sameEndPoint" checked
+                               onchange="toggleEndPoint()"
+                               class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                        <label for="sameEndPoint" class="text-sm text-gray-700">
+                            Même point d'arrivée que le point de départ
+                        </label>
+                    </div>
+
+                    <!-- Point d'arrivée -->
+                    <div id="endPointContainer" class="hidden">
+                        <label for="endPoint" class="block text-sm font-medium text-gray-700 mb-2">
+                            🏁 Point d'arrivée
+                        </label>
+                        <div class="flex gap-2">
+                            <input type="text" id="endPoint"
+                                   placeholder="Cliquez sur 'Carte' pour sélectionner"
+                                   class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-gray-50 cursor-pointer"
+                                   readonly
+                                   onclick="openEndPointModal()">
+                            <button type="button" onclick="openEndPointModal()"
+                                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">
+                                🗺️ Carte
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Point d'arrivée différent du point de départ</p>
                     </div>
 
                     <!-- Mode d'optimisation -->

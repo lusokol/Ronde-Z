@@ -20,6 +20,9 @@ let geocodeResults = []; // Stocker tous les résultats du géocodage
 // Éléments DOM
 const apiKeyInput = document.getElementById('apiKey');
 const startPointInput = document.getElementById('startPoint');
+const endPointInput = document.getElementById('endPoint');
+const sameEndPointCheckbox = document.getElementById('sameEndPoint');
+const endPointContainer = document.getElementById('endPointContainer');
 const pointsList = document.getElementById('pointsList');
 const addPointBtn = document.getElementById('addPoint');
 const rondeForm = document.getElementById('rondeForm');
@@ -876,11 +879,29 @@ function toggleSecteur(secteurId) {
 // Gestion du modal d'ajout d'adresse avec carte
 // ==========================================
 
+function toggleEndPoint() {
+    if (sameEndPointCheckbox.checked) {
+        // Même point d'arrivée : masquer le champ
+        endPointContainer.classList.add('hidden');
+        endPointInput.value = '';
+    } else {
+        // Point d'arrivée différent : afficher le champ
+        endPointContainer.classList.remove('hidden');
+    }
+}
+
 function openStartPointModal() {
     // Récupérer l'adresse actuelle du point de départ s'il existe
     const currentAddress = startPointInput.value.trim();
     const pointData = currentAddress ? { address: currentAddress } : null;
     openAddressModal('startPoint', pointData);
+}
+
+function openEndPointModal() {
+    // Récupérer l'adresse actuelle du point d'arrivée s'il existe
+    const currentAddress = endPointInput.value.trim();
+    const pointData = currentAddress ? { address: currentAddress } : null;
+    openAddressModal('endPoint', pointData);
 }
 
 function openAddressModal(mode = 'add', pointData = null) {
@@ -899,6 +920,13 @@ function openAddressModal(mode = 'add', pointData = null) {
     if (mode === 'startPoint') {
         modalTitle.textContent = '🏁 Sélectionner le point de départ';
         // Cacher les champs non nécessaires pour le point de départ
+        modalPointName.closest('div').classList.add('hidden');
+        modalTimeHours.closest('div').closest('div').classList.add('hidden');
+        modalTimeConstraint.closest('div').classList.add('hidden');
+        modalConstraintTimeContainer.classList.add('hidden');
+    } else if (mode === 'endPoint') {
+        modalTitle.textContent = '🏁 Sélectionner le point d\'arrivée';
+        // Cacher les champs non nécessaires pour le point d'arrivée
         modalPointName.closest('div').classList.add('hidden');
         modalTimeHours.closest('div').closest('div').classList.add('hidden');
         modalTimeConstraint.closest('div').classList.add('hidden');
@@ -1238,6 +1266,14 @@ function confirmAddressModal(mode) {
         return;
     }
 
+    if (mode === 'endPoint') {
+        // Définir le point d'arrivée
+        endPointInput.value = address;
+        showError('Point d\'arrivée défini avec succès !', 'success');
+        closeAddressModal();
+        return;
+    }
+
     // Préparer les données du point
     const pointData = {
         name: modalPointName.value.trim(),
@@ -1425,6 +1461,15 @@ async function handleFormSubmit(e) {
 
     // Récupérer les données
     const startPoint = startPointInput.value.trim();
+    const sameEndPoint = sameEndPointCheckbox.checked;
+    const endPoint = sameEndPoint ? startPoint : endPointInput.value.trim();
+
+    // Vérifier le point d'arrivée si différent
+    if (!sameEndPoint && !endPoint) {
+        showError('Veuillez définir le point d\'arrivée ou cocher "Même point d\'arrivée".');
+        return;
+    }
+
     const points = [];
     const pointElements = pointsList.querySelectorAll('.point-item');
 
@@ -1459,14 +1504,24 @@ async function handleFormSubmit(e) {
 
     try {
         // Géocoder toutes les adresses
-        const allAddresses = [startPoint, ...points.map(p => p.address)];
+        let allAddresses, endPointIndex;
+        if (sameEndPoint) {
+            // Point d'arrivée identique au point de départ
+            allAddresses = [startPoint, ...points.map(p => p.address)];
+            endPointIndex = 0; // Le point d'arrivée est le même que l'index 0 (départ)
+        } else {
+            // Point d'arrivée différent
+            allAddresses = [startPoint, ...points.map(p => p.address), endPoint];
+            endPointIndex = allAddresses.length - 1; // Dernier index
+        }
+
         const coordinates = await geocodeAddresses(allAddresses, apiKey);
 
         // Créer la matrice de distances
         const distanceMatrix = await getDistanceMatrix(coordinates, apiKey);
 
         // Optimiser la route (TSP) avec contraintes horaires
-        const optimizedRoute = optimizeTSP(distanceMatrix, points.length, points, optimizationMode);
+        const optimizedRoute = optimizeTSP(distanceMatrix, points.length, points, optimizationMode, endPointIndex);
 
         // Calculer les détails de la route
         const routeDetails = calculateRouteDetails(
@@ -1474,7 +1529,8 @@ async function handleFormSubmit(e) {
             distanceMatrix,
             startPoint,
             points,
-            coordinates
+            coordinates,
+            sameEndPoint ? startPoint : endPoint
         );
 
         // Afficher les résultats
@@ -1566,10 +1622,11 @@ async function getDistanceMatrix(coordinates, apiKey) {
 // Algorithme d'optimisation TSP avec contraintes horaires
 // ==========================================
 
-function optimizeTSP(matrix, numPoints, points, optimizationMode = 'time') {
+function optimizeTSP(matrix, numPoints, points, optimizationMode = 'time', endPointIndex = 0) {
     // Algorithme du plus proche voisin modifié avec contraintes horaires
-    // Point 0 = départ/arrivée
+    // Point 0 = départ
     // Points 1 à numPoints = points à visiter
+    // endPointIndex = index du point d'arrivée (0 si même que le départ)
 
     const distances = matrix.distances;
     const durations = matrix.durations; // en secondes
@@ -1650,8 +1707,8 @@ function optimizeTSP(matrix, numPoints, points, optimizationMode = 'time') {
         }
     }
 
-    // Retour au point de départ
-    route.push(0);
+    // Retour au point d'arrivée (peut être différent du point de départ)
+    route.push(endPointIndex);
 
     // Appliquer l'optimisation 2-opt pour améliorer la route
     const improvedRoute = improve2opt(route, metric);
@@ -1708,13 +1765,21 @@ function improve2opt(route, metric) {
 // Calcul des détails de la route
 // ==========================================
 
-function calculateRouteDetails(route, matrix, startPoint, points, coordinates) {
+function calculateRouteDetails(route, matrix, startPoint, points, coordinates, endPoint = null) {
     const steps = [];
     let totalDistance = 0;
     let totalTravelTime = 0;
     let totalOnSiteTime = 0;
     let currentTime = new Date();
     currentTime.setSeconds(0, 0);
+
+    // Si endPoint n'est pas fourni, utiliser startPoint
+    if (!endPoint) {
+        endPoint = startPoint;
+    }
+
+    // Déterminer l'index du point d'arrivée
+    const endPointIndex = route[route.length - 1];
 
     for (let i = 0; i < route.length - 1; i++) {
         const from = route[i];
@@ -1733,6 +1798,9 @@ function calculateRouteDetails(route, matrix, startPoint, points, coordinates) {
 
         if (from === 0) {
             fromAddress = startPoint;
+        } else if (from === endPointIndex && from !== 0) {
+            // C'est le point d'arrivée (différent du départ)
+            fromAddress = endPoint;
         } else {
             fromAddress = points[from - 1].address;
             onSiteTime = points[from - 1].timeOnSite;
@@ -1741,6 +1809,9 @@ function calculateRouteDetails(route, matrix, startPoint, points, coordinates) {
 
         if (to === 0) {
             toAddress = startPoint;
+        } else if (to === endPointIndex && to !== 0) {
+            // C'est le point d'arrivée (différent du départ)
+            toAddress = endPoint;
         } else {
             toAddress = points[to - 1].address;
             pointData = points[to - 1];
