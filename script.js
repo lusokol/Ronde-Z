@@ -801,8 +801,8 @@ function useAsStartPoint(favoriteId) {
     const favorites = getFavorites();
     const favorite = favorites.find(fav => fav.id === favoriteId);
     if (favorite) {
-        startPointInput.value = favorite.address;
-        showError(`Point de départ défini : ${favorite.name}`, 'success');
+        // Ouvrir le modal avec l'adresse pré-remplie
+        openAddressModal('startPoint', { address: favorite.address });
     }
 }
 
@@ -876,6 +876,13 @@ function toggleSecteur(secteurId) {
 // Gestion du modal d'ajout d'adresse avec carte
 // ==========================================
 
+function openStartPointModal() {
+    // Récupérer l'adresse actuelle du point de départ s'il existe
+    const currentAddress = startPointInput.value.trim();
+    const pointData = currentAddress ? { address: currentAddress } : null;
+    openAddressModal('startPoint', pointData);
+}
+
 function openAddressModal(mode = 'add', pointData = null) {
     const modal = document.getElementById('addressModal');
     const modalAddress = document.getElementById('modalAddress');
@@ -886,6 +893,23 @@ function openAddressModal(mode = 'add', pointData = null) {
     const modalConstraintTime = document.getElementById('modalConstraintTime');
     const modalConstraintTimeContainer = document.getElementById('modalConstraintTimeContainer');
     const geocodeStatus = document.getElementById('geocodeStatus');
+
+    // Modifier le titre selon le mode
+    const modalTitle = modal.querySelector('h3');
+    if (mode === 'startPoint') {
+        modalTitle.textContent = '🏁 Sélectionner le point de départ';
+        // Cacher les champs non nécessaires pour le point de départ
+        modalPointName.closest('div').classList.add('hidden');
+        modalTimeHours.closest('div').closest('div').classList.add('hidden');
+        modalTimeConstraint.closest('div').classList.add('hidden');
+        modalConstraintTimeContainer.classList.add('hidden');
+    } else {
+        modalTitle.textContent = '📍 Ajouter une adresse';
+        // Afficher tous les champs pour les autres modes
+        modalPointName.closest('div').classList.remove('hidden');
+        modalTimeHours.closest('div').closest('div').classList.remove('hidden');
+        modalTimeConstraint.closest('div').classList.remove('hidden');
+    }
 
     // Réinitialiser le formulaire
     if (pointData) {
@@ -904,11 +928,13 @@ function openAddressModal(mode = 'add', pointData = null) {
         modalConstraintTime.value = '09:00';
     }
 
-    // Afficher/masquer le champ de contrainte horaire
-    if (modalTimeConstraint.value === 'none') {
-        modalConstraintTimeContainer.classList.add('hidden');
-    } else {
-        modalConstraintTimeContainer.classList.remove('hidden');
+    // Afficher/masquer le champ de contrainte horaire (sauf pour startPoint)
+    if (mode !== 'startPoint') {
+        if (modalTimeConstraint.value === 'none') {
+            modalConstraintTimeContainer.classList.add('hidden');
+        } else {
+            modalConstraintTimeContainer.classList.remove('hidden');
+        }
     }
 
     // Réinitialiser le statut de géocodage
@@ -1201,6 +1227,14 @@ function confirmAddressModal(mode) {
 
     if (!address) {
         showError('Veuillez entrer une adresse.');
+        return;
+    }
+
+    if (mode === 'startPoint') {
+        // Définir le point de départ
+        startPointInput.value = address;
+        showError('Point de départ défini avec succès !', 'success');
+        closeAddressModal();
         return;
     }
 
