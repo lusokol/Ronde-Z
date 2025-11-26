@@ -17,6 +17,12 @@ let geocodeTimeout = null;
 let currentGeocodedData = null;
 let geocodeResults = []; // Stocker tous les résultats du géocodage
 
+// Variables pour l'import Excel
+let excelData = null;
+let excelColumns = [];
+let excelImportMap = null;
+let excelParsedAddresses = [];
+
 // Éléments DOM
 const apiKeyInput = document.getElementById('apiKey');
 const startPointInput = document.getElementById('startPoint');
